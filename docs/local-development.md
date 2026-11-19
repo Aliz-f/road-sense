@@ -58,7 +58,7 @@ private application network. Containers communicate using these service names:
 |---|---|---|
 | `mqtt-broker` | authenticated TLS MQTT connection | none; internal Compose network only |
 | `sensor-replay` | process/readiness state | none |
-| `signal-processor` | authenticated raw-topic subscription and structured ready event | none |
+| `signal-processor` | authenticated raw/completion subscriptions and structured ready event | none |
 | `road-analyzer` | DB and MQTT readiness | none |
 | `postgres` | `pg_isready` | none by default; if needed, `127.0.0.1:5432` only |
 | `api` | HTTP `/health/ready` | `127.0.0.1:8000` |
@@ -95,8 +95,12 @@ docker image rm docker.io/library/busybox:1.36.1
 ```
 
 Phase 02 created `infrastructure/compose/local.compose.yaml`; Phase 03 added
-Signal Processor. Generate the ignored local credentials/certificates, then
-use the explicit environment and Compose paths consistently:
+Signal Processor and the `roadsense/v1/imu/run-complete` control path. The
+local broker limits a subscriber to one unacknowledged QoS message; the
+processor manually acknowledges after processing so its bounded queue applies
+backpressure without blocking the Paho callback. Generate the ignored local
+credentials/certificates, then use the explicit environment and Compose paths
+consistently:
 
 ```sh
 ./tools/prepare_phase02_local.sh

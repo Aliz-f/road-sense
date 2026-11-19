@@ -17,8 +17,9 @@ See `../docs/phase-02-report.md` and the numbered phase specifications.
 
 `phase03_e2e.sh` builds the independent processor, runs its network-disabled
 unit suite, compares unpaced and 10× feature payloads against a separate
-standard-library reference calculation, and optionally validates the complete
-62,169-row recording plus graceful final-window flush.
+standard-library reference calculation, exercises broker backpressure with a
+queue capacity of one, verifies completion without stopping the processor, and
+optionally validates all 747 windows from the complete 62,169-row recording.
 
 ```sh
 ./tests/phase03_e2e.sh

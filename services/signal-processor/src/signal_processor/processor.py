@@ -4,13 +4,21 @@ import math
 import statistics
 from datetime import datetime, timedelta
 
-from .model import InvalidRawSample, RawBatch, RawSample, RunMetadata, Window
+from .model import (
+    InvalidRawSample,
+    RawBatch,
+    RawSample,
+    RunCompletion,
+    RunMetadata,
+    Window,
+)
 from .schema import (
     ALGORITHM_VERSION,
     BASELINE_METHOD,
     QUALITY_FLAG_ORDER,
     format_source_timestamp,
     parse_raw_message,
+    parse_run_complete_message,
     validate_feature_payload,
 )
 
@@ -29,6 +37,9 @@ class RunProcessor:
         self.last_sample_index: int | None = None
         self.last_source_time: datetime | None = None
         self.pending_flags: set[str] = set()
+        self.pending_completion: RunCompletion | None = None
+        self.completion_digest: str | None = None
+        self.completed = False
 
     def _mark_discontinuity(self, flag: str) -> None:
         if self.active_window is not None:
@@ -151,6 +162,8 @@ class RunProcessor:
             if previous_digest == batch.digest:
                 return []
             raise ValueError("sequence_id was reused with conflicting content")
+        if self.completed:
+            raise ValueError("raw batch arrived after run completion")
         if batch.sequence_id < self.expected_sequence_id:
             raise ValueError("sequence_id arrived out of order")
         if batch.sequence_id != self.expected_sequence_id:
@@ -164,6 +177,41 @@ class RunProcessor:
                 self._mark_invalid_sample(sample)
                 continue
             features.extend(self._accept_sample(sample))
+        features.extend(self._try_complete())
+        return features
+
+    def request_completion(
+        self, completion: RunCompletion
+    ) -> list[dict[str, object]]:
+        if completion.metadata != self.metadata:
+            raise ValueError("run-complete metadata does not match the raw run")
+        if self.completion_digest is not None:
+            if self.completion_digest == completion.digest:
+                return []
+            raise ValueError("run completion was reused with conflicting content")
+        self.pending_completion = completion
+        self.completion_digest = completion.digest
+        return self._try_complete()
+
+    def _try_complete(self) -> list[dict[str, object]]:
+        completion = self.pending_completion
+        if completion is None or self.completed:
+            return []
+        received_message_count = len(self.seen_sequences)
+        if received_message_count < completion.raw_message_count:
+            return []
+        if received_message_count > completion.raw_message_count:
+            raise ValueError("received more raw batches than run completion declares")
+        if self.expected_sequence_id != completion.raw_message_count:
+            raise ValueError("run completion conflicts with raw sequence IDs")
+        if self.active_window is None or self.last_sample_index is None:
+            raise ValueError("cannot complete a run without accepted samples")
+        if self.last_sample_index > completion.last_sample_index:
+            raise ValueError("run completion last_sample_index moved backwards")
+        if self.last_sample_index < completion.last_sample_index:
+            self._mark_discontinuity("source_time_gap")
+        features = self.finalize()
+        self.completed = True
         return features
 
     def finalize(self) -> list[dict[str, object]]:
@@ -185,6 +233,14 @@ class SignalEngine:
             run = RunProcessor(batch.metadata)
             self.runs[batch.metadata.run_id] = run
         return run.process(batch)
+
+    def complete_run(self, encoded: bytes) -> list[dict[str, object]]:
+        completion = parse_run_complete_message(encoded)
+        run = self.runs.get(completion.metadata.run_id)
+        if run is None:
+            run = RunProcessor(completion.metadata)
+            self.runs[completion.metadata.run_id] = run
+        return run.request_completion(completion)
 
     def finalize_all(self) -> list[dict[str, object]]:
         features: list[dict[str, object]] = []

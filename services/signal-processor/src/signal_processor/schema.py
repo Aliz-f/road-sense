@@ -7,7 +7,13 @@ import re
 import uuid
 from datetime import datetime, timezone
 
-from .model import InvalidRawSample, RawBatch, RawSample, RunMetadata
+from .model import (
+    InvalidRawSample,
+    RawBatch,
+    RawSample,
+    RunCompletion,
+    RunMetadata,
+)
 
 
 SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
@@ -67,15 +73,17 @@ def _non_negative_integer(value: object, field: str) -> int:
     return value
 
 
-def parse_raw_message(encoded: bytes) -> RawBatch:
+def _decode_object(encoded: bytes, description: str) -> dict[str, object]:
     try:
         payload = json.loads(encoded)
     except (UnicodeDecodeError, json.JSONDecodeError) as error:
-        raise ValueError("raw MQTT payload must be UTF-8 JSON") from error
+        raise ValueError(f"{description} must be UTF-8 JSON") from error
     if not isinstance(payload, dict):
-        raise ValueError("raw payload must be an object")
-    if payload.get("schema_version") != 1:
-        raise ValueError("schema_version must be 1")
+        raise ValueError(f"{description} must be an object")
+    return payload
+
+
+def _parse_metadata(payload: dict[str, object]) -> RunMetadata:
     run_id = _non_empty_string(payload, "run_id")
     try:
         uuid.UUID(run_id)
@@ -90,6 +98,14 @@ def parse_raw_message(encoded: bytes) -> RawBatch:
     )
     if not SHA256_PATTERN.fullmatch(metadata.source_archive_sha256):
         raise ValueError("source_archive_sha256 must be lowercase SHA-256")
+    return metadata
+
+
+def parse_raw_message(encoded: bytes) -> RawBatch:
+    payload = _decode_object(encoded, "raw MQTT payload")
+    if payload.get("schema_version") != 1:
+        raise ValueError("schema_version must be 1")
+    metadata = _parse_metadata(payload)
     if payload.get("acceleration_unit") != "mg":
         raise ValueError("acceleration_unit must be mg")
     sequence_id = _non_negative_integer(payload.get("sequence_id"), "sequence_id")
@@ -154,6 +170,39 @@ def parse_raw_message(encoded: bytes) -> RawBatch:
         metadata=metadata,
         sequence_id=sequence_id,
         samples=tuple(samples),
+        digest=digest(payload),
+    )
+
+
+def parse_run_complete_message(encoded: bytes) -> RunCompletion:
+    payload = _decode_object(encoded, "run-complete MQTT payload")
+    if payload.get("schema_version") != 1:
+        raise ValueError("schema_version must be 1")
+    if payload.get("event") != "run_complete":
+        raise ValueError("event must be run_complete")
+    metadata = _parse_metadata(payload)
+    raw_message_count = _non_negative_integer(
+        payload.get("raw_message_count"), "raw_message_count"
+    )
+    sample_count = _non_negative_integer(payload.get("sample_count"), "sample_count")
+    last_sequence_id = _non_negative_integer(
+        payload.get("last_sequence_id"), "last_sequence_id"
+    )
+    last_sample_index = _non_negative_integer(
+        payload.get("last_sample_index"), "last_sample_index"
+    )
+    if raw_message_count <= 0 or sample_count <= 0:
+        raise ValueError("run-complete counts must be positive")
+    if last_sequence_id != raw_message_count - 1:
+        raise ValueError("last_sequence_id does not match raw_message_count")
+    if last_sample_index != sample_count - 1:
+        raise ValueError("last_sample_index does not match sample_count")
+    return RunCompletion(
+        metadata=metadata,
+        raw_message_count=raw_message_count,
+        sample_count=sample_count,
+        last_sequence_id=last_sequence_id,
+        last_sample_index=last_sample_index,
         digest=digest(payload),
     )
 

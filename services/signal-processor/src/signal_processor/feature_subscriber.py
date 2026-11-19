@@ -94,6 +94,8 @@ def main() -> int:
             "feature_count": len(ordered),
             "first_window_index": ordered[0]["window_index"],
             "last_window_index": ordered[-1]["window_index"],
+            "last_sample_count": ordered[-1]["sample_count"],
+            "last_quality_flags": ordered[-1]["quality_flags"],
         }
         if include_features:
             completion["features"] = ordered

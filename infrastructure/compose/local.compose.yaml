@@ -60,7 +60,7 @@ services:
     command:
       - |
         mosquitto_passwd -b -c /run/roadsense/mqtt/password_file "$$MQTT_USERNAME" "$$MQTT_PASSWORD"
-        printf 'user %s\ntopic readwrite roadsense/v1/imu/raw\ntopic readwrite roadsense/v1/imu/features\ntopic read $$SYS/#\n' "$$MQTT_USERNAME" > /run/roadsense/mqtt/acl_file
+        printf 'user %s\ntopic readwrite roadsense/v1/imu/raw\ntopic readwrite roadsense/v1/imu/run-complete\ntopic readwrite roadsense/v1/imu/features\ntopic read $$SYS/#\n' "$$MQTT_USERNAME" > /run/roadsense/mqtt/acl_file
         chmod 600 /run/roadsense/mqtt/password_file /run/roadsense/mqtt/acl_file
     volumes:
       - type: bind
@@ -130,6 +130,8 @@ services:
 
   signal-processor:
     <<: [*processor-image, *processor-environment]
+    environment:
+      PROCESSOR_QUEUE_CAPACITY: ${PROCESSOR_QUEUE_CAPACITY:-1024}
     depends_on:
       mqtt-broker:
         condition: service_healthy

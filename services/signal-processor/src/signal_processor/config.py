@@ -40,6 +40,7 @@ class ProcessorConfig:
     mqtt_password: str
     mqtt_tls_ca_file: Path
     raw_topic: str
+    run_complete_topic: str
     feature_topic: str
     client_id: str
     connect_timeout_seconds: float
@@ -55,6 +56,9 @@ class ProcessorConfig:
             mqtt_password=required("MQTT_PASSWORD"),
             mqtt_tls_ca_file=Path(required("MQTT_TLS_CA_FILE")),
             raw_topic=os.getenv("MQTT_RAW_TOPIC", "roadsense/v1/imu/raw"),
+            run_complete_topic=os.getenv(
+                "MQTT_RUN_COMPLETE_TOPIC", "roadsense/v1/imu/run-complete"
+            ),
             feature_topic=os.getenv(
                 "MQTT_FEATURE_TOPIC", "roadsense/v1/imu/features"
             ),

@@ -15,6 +15,7 @@ from .processor import SignalEngine
 
 @dataclass(frozen=True, slots=True)
 class QueuedMessage:
+    topic: str
     payload: bytes
     message_id: int
     qos: int
@@ -30,6 +31,8 @@ class MqttSignalProcessor:
         )
         self.connected = threading.Event()
         self.subscribed = threading.Event()
+        self.fatal_error: RuntimeError | None = None
+        self._fatal_lock = threading.Lock()
         self.client = mqtt.Client(
             callback_api_version=mqtt.CallbackAPIVersion.VERSION2,
             client_id=config.client_id,
@@ -58,7 +61,12 @@ class MqttSignalProcessor:
             return
         self.connected.set()
         self.subscribed.clear()
-        result, _ = client.subscribe(self.config.raw_topic, qos=1)
+        result, _ = client.subscribe(
+            [
+                (self.config.raw_topic, 1),
+                (self.config.run_complete_topic, 1),
+            ]
+        )
         if result != mqtt.MQTT_ERR_SUCCESS:
             emit("processor_subscribe_failed", result=result)
 
@@ -77,19 +85,37 @@ class MqttSignalProcessor:
             emit("processor_subscribe_rejected")
             return
         self.subscribed.set()
-        emit("processor_ready", raw_topic=self.config.raw_topic)
+        emit(
+            "processor_ready",
+            raw_topic=self.config.raw_topic,
+            run_complete_topic=self.config.run_complete_topic,
+        )
 
     def _on_message(self, client, userdata, message) -> None:
         del client, userdata
         queued = QueuedMessage(
+            topic=message.topic,
             payload=bytes(message.payload),
             message_id=message.mid,
             qos=message.qos,
         )
-        # Blocking here applies bounded backpressure to Paho's network thread;
-        # returning without queueing would leave an unacknowledged message
-        # stranded on an otherwise healthy connection.
-        self.messages.put(queued)
+        try:
+            self.messages.put_nowait(queued)
+        except queue.Full:
+            error = RuntimeError(
+                "processor queue overflowed despite broker inflight backpressure"
+            )
+            with self._fatal_lock:
+                if self.fatal_error is None:
+                    self.fatal_error = error
+                    emit_error(
+                        "processor_queue_overflow",
+                        error,
+                        queue_capacity=self.config.queue_capacity,
+                    )
+            # Fail closed without blocking Paho's network thread. The message
+            # is deliberately not acknowledged and the service exits nonzero.
+            self.stop_event.set()
 
     def start(self) -> None:
         result = self.client.connect(
@@ -125,15 +151,23 @@ class MqttSignalProcessor:
         )
 
     def _handle(self, message: QueuedMessage) -> None:
+        event = "mqtt_message_rejected"
         try:
-            features = self.engine.process_message(message.payload)
+            if message.topic == self.config.raw_topic:
+                features = self.engine.process_message(message.payload)
+                event = "raw_message_rejected"
+            elif message.topic == self.config.run_complete_topic:
+                features = self.engine.complete_run(message.payload)
+                event = "run_complete_rejected"
+            else:
+                raise ValueError(f"unexpected MQTT topic: {message.topic}")
             for feature in features:
                 self._publish(feature)
         except ValueError as error:
-            emit_error("raw_message_rejected", error, message_id=message.message_id)
+            emit_error(event, error, message_id=message.message_id)
         result = self.client.ack(message.message_id, message.qos)
         if result != mqtt.MQTT_ERR_SUCCESS:
-            raise ConnectionError(f"MQTT raw acknowledgement returned {result}")
+            raise ConnectionError(f"MQTT message acknowledgement returned {result}")
 
     def run(self) -> None:
         while not self.stop_event.is_set() or not self.messages.empty():
@@ -142,6 +176,8 @@ class MqttSignalProcessor:
             except queue.Empty:
                 continue
             self._handle(message)
+        if self.fatal_error is not None:
+            raise self.fatal_error
         for feature in self.engine.finalize_all():
             self._publish(feature)
 

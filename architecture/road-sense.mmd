@@ -8,7 +8,9 @@ flowchart TB
     LDB[("PostgreSQL")]
     LAPI["FastAPI"]
     LUI["Streamlit"]
-    LD --> LF --> LM --> LP
+    LD --> LF
+    LF -->|"raw + run-complete"| LM
+    LM -->|"raw + run-complete"| LP
     LP -->|"features via MQTT"| LM
     LM -->|"feature topic"| LA
     LA --> LDB --> LAPI --> LUI
@@ -29,7 +31,7 @@ flowchart TB
     RAPI["FastAPI"]
     RHT["HTTPS API endpoint"]
     RMT --> RM
-    RM -->|"raw"| RP
+    RM -->|"raw + run-complete"| RP
     RP -->|"features via broker"| RM
     RM -->|"features"| RA
     RA --> RDB --> RAPI --> RHT

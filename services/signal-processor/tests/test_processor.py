@@ -53,6 +53,28 @@ def payload(
     ).encode()
 
 
+def completion_payload(
+    *, run_id: str, raw_message_count: int, sample_count: int
+) -> bytes:
+    return json.dumps(
+        {
+            "schema_version": 1,
+            "event": "run_complete",
+            "run_id": run_id,
+            "session_id": "bumpy-gravel-20261019",
+            "sensor_id": "bosch-xdk-110",
+            "source_archive_sha256": SOURCE_HASH,
+            "source_member": "imu/bosch_imu.csv",
+            "raw_message_count": raw_message_count,
+            "sample_count": sample_count,
+            "last_sequence_id": raw_message_count - 1,
+            "last_sample_index": sample_count - 1,
+        },
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode()
+
+
 class ProcessorTests(unittest.TestCase):
     def setUp(self) -> None:
         self.run_id = str(uuid.uuid4())
@@ -224,9 +246,65 @@ class ProcessorTests(unittest.TestCase):
             [sample(0, 0.000, 990), sample(1, 0.012, 1010), sample(2, 1.000)],
             run_id=self.run_id,
         )
-        immediate = SignalEngine().process_message(encoded)
-        delayed = SignalEngine().process_message(encoded)
+        completion = completion_payload(
+            run_id=self.run_id, raw_message_count=1, sample_count=3
+        )
+        immediate_engine = SignalEngine()
+        immediate = immediate_engine.process_message(encoded)
+        immediate.extend(immediate_engine.complete_run(completion))
+        delayed_engine = SignalEngine()
+        delayed = delayed_engine.process_message(encoded)
+        delayed.extend(delayed_engine.complete_run(completion))
         self.assertEqual(immediate, delayed)
+
+    def test_run_complete_emits_final_window_without_shutdown(self) -> None:
+        features = self.engine.process_message(
+            payload(
+                [sample(0, 0.000), sample(1, 0.012), sample(2, 1.000)],
+                run_id=self.run_id,
+            )
+        )
+        final = self.engine.complete_run(
+            completion_payload(
+                run_id=self.run_id, raw_message_count=1, sample_count=3
+            )
+        )
+        self.assertEqual([item["window_index"] for item in features], [0])
+        self.assertEqual([item["window_index"] for item in final], [1])
+        self.assertEqual(
+            final[0]["quality_flags"], ["source_time_gap", "incomplete_window"]
+        )
+
+    def test_early_run_complete_waits_for_declared_raw_batches(self) -> None:
+        completion = completion_payload(
+            run_id=self.run_id, raw_message_count=2, sample_count=2
+        )
+        self.assertEqual(self.engine.complete_run(completion), [])
+        first = self.engine.process_message(
+            payload([sample(0, 0.000)], run_id=self.run_id, sequence_id=0)
+        )
+        self.assertEqual(first, [])
+        final = self.engine.process_message(
+            payload([sample(1, 0.012)], run_id=self.run_id, sequence_id=1)
+        )
+        self.assertEqual(len(final), 1)
+        self.assertEqual(final[0]["window_index"], 0)
+        self.assertIn("incomplete_window", final[0]["quality_flags"])
+        self.assertEqual(self.engine.complete_run(completion), [])
+
+    def test_conflicting_run_complete_is_rejected(self) -> None:
+        self.engine.process_message(payload([sample(0, 0.000)], run_id=self.run_id))
+        completion = completion_payload(
+            run_id=self.run_id, raw_message_count=1, sample_count=1
+        )
+        self.engine.complete_run(completion)
+        conflicting = json.loads(completion)
+        conflicting["sample_count"] = 2
+        conflicting["last_sample_index"] = 1
+        with self.assertRaisesRegex(ValueError, "conflicting content"):
+            self.engine.complete_run(
+                json.dumps(conflicting, separators=(",", ":"), sort_keys=True).encode()
+            )
 
     def test_finalize_is_idempotent_and_marks_partial_window(self) -> None:
         self.engine.process_message(

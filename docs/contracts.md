@@ -19,6 +19,7 @@ The accepted Bosch v1 CSV header is exactly:
 | Topic | Producer | Consumer | Status |
 |---|---|---|---|
 | roadsense/v1/imu/raw | sensor-replay | signal-processor | MVP |
+| roadsense/v1/imu/run-complete | sensor-replay | signal-processor | MVP control message |
 | roadsense/v1/imu/features | signal-processor | road-analyzer | MVP |
 | roadsense/v1/events | road-analyzer | optional monitoring | MVP |
 | roadsense/v1/can/speed | sensor-replay | analyzer | Reserved; disabled until SPEED unit is verified |
@@ -40,6 +41,27 @@ The accepted Bosch v1 CSV header is exactly:
 Each sample requires source_timestamp, zero-based sample_index, acc_x_mg, acc_y_mg, and acc_z_mg. Timestamp and index must be strictly increasing within a valid source stream. Magnetometer and gyroscope fields may be carried only with their original unit-bearing names; they are not MVP feature inputs. Replay/publish time, if added, must be named published_at and never substituted for source_timestamp.
 
 The raw-message idempotency key is (run_id, sequence_id). Re-delivery of the same key must contain identical source samples; conflicting reuse is an error.
+
+## Replay completion payload v1
+
+After every raw QoS 1 publish for a successful non-empty replay has been
+acknowledged, Sensor Replay publishes one QoS 1 control message to
+`roadsense/v1/imu/run-complete`. Required fields are `schema_version=1`,
+`event=run_complete`, the same `run_id`, `session_id`, `sensor_id`,
+`source_archive_sha256`, and `source_member` as the raw stream, plus positive
+`raw_message_count` and `sample_count`, zero-based `last_sequence_id`, and
+zero-based `last_sample_index`. The following relationships are required:
+
+    last_sequence_id = raw_message_count - 1
+    last_sample_index = sample_count - 1
+
+The completion idempotency key is `(run_id, event)`. An identical QoS 1
+redelivery is ignored; conflicting content or provenance is rejected. Because
+MQTT does not promise ordering across different topics, the processor may
+receive the control message before one or more raw messages. It stores the
+message and finalizes only after the declared number of distinct, contiguous
+raw sequence IDs has arrived. A completion message never stops the processor;
+it closes only the named run.
 
 ## Feature payload v1 and processing agreement
 
@@ -73,11 +95,19 @@ rejected. Non-monotonic or invalid samples are not silently coerced or
 interpolated; they are skipped and the affected window is flagged.
 
 A window is emitted as complete only after an accepted sample reaches a later
-source-time window. The still-open window is emitted with incomplete_window on
-an explicit graceful processor shutdown. Wall-clock inactivity is not a run
+source-time window. The still-open window is emitted with `incomplete_window`
+after its validated replay-completion message and all declared raw batches
+have arrived. Explicit graceful processor shutdown remains a fallback for a
+run whose producer cannot send completion. Wall-clock inactivity is not a run
 boundary because it would make results depend on replay rate or broker delays.
-Phase 03 tests cover partial final windows, gaps, duplicates, invalid samples,
-and replay-rate invariance.
+Phase 03 tests cover partial final windows, early and duplicate completion,
+gaps, duplicates, invalid samples, and replay-rate invariance.
+
+The local broker limits each subscriber to one unacknowledged QoS message.
+The processor acknowledges a raw or completion message only after validation,
+processing, and any feature publication. Its Paho network callback performs a
+non-blocking insertion into a bounded queue. An unexpected full queue is a
+fatal, non-acknowledged error rather than a blocking callback or silent drop.
 
 ## CAN SPEED gate
 

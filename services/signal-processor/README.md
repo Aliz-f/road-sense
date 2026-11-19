@@ -3,7 +3,8 @@
 Phase 03 implements an independent MQTT microservice that consumes validated
 raw Bosch IMU batches from `roadsense/v1/imu/raw`, groups accepted samples into
 one-second half-open source-time windows, and publishes feature payloads to
-`roadsense/v1/imu/features`.
+`roadsense/v1/imu/features`. It also consumes the provenance-bound
+`roadsense/v1/imu/run-complete` control topic.
 
 For every accepted acceleration vector it computes magnitude in mg, uses the
 window median magnitude as the orientation-robust baseline, and publishes RMS
@@ -19,7 +20,12 @@ The processor:
   duplicates, while rejecting conflicting reuse of an idempotency key;
 - does not interpolate missing samples;
 - flags sample/sequence gaps, source-time gaps above 18 ms, non-monotonic
-  source time, invalid samples, and a final window flushed at shutdown;
+  source time, invalid samples, and the final partial window;
+- stores an early run-completion message until all declared raw sequences have
+  arrived, publishes the final window, and continues serving other runs;
+- uses broker QoS inflight limiting, manual acknowledgement, and a bounded
+  queue for backpressure; its Paho callback never waits for queue capacity and
+  fails closed on an unexpected overflow;
 - anchors windows to the first accepted source timestamp for each `run_id`, so
   replay speed and wall-clock delivery timing do not affect features.
 

@@ -7,7 +7,6 @@ env_file="$repository_root/config/environments/local/.env.phase02"
 unpaced_log=$(mktemp)
 paced_log=$(mktemp)
 full_log=$(mktemp)
-partial_log=$(mktemp)
 replay_log=$(mktemp)
 subscriber_pid=
 
@@ -21,7 +20,7 @@ cleanup() {
     wait "$subscriber_pid" >/dev/null 2>&1 || true
   fi
   compose down --remove-orphans >/dev/null 2>&1 || true
-  rm -f "$unpaced_log" "$paced_log" "$full_log" "$partial_log" "$replay_log"
+  rm -f "$unpaced_log" "$paced_log" "$full_log" "$replay_log"
 }
 trap cleanup EXIT HUP INT TERM
 
@@ -69,6 +68,7 @@ run_replay() {
     -e BATCH_SIZE=64 \
     sensor-replay >"$replay_log" 2>&1
   grep -q '"event":"replay_finished"' "$replay_log"
+  grep -q '"event":"run_complete_published"' "$replay_log"
   grep -q "\"samples\":$expected_samples" "$replay_log"
 
   if ! wait "$subscriber_pid"; then
@@ -85,7 +85,7 @@ run_replay() {
 compose config --quiet
 compose build sensor-replay signal-processor feature-subscriber processor-unit-tests
 compose run --rm --no-deps processor-unit-tests
-compose up --detach --wait mqtt-broker signal-processor
+PROCESSOR_QUEUE_CAPACITY=1 compose up --detach --wait mqtt-broker signal-processor
 
 processor_ready=false
 for _ in $(seq 1 150); do
@@ -107,9 +107,11 @@ test -n "$broker_id"
 test -n "$processor_id"
 test -z "$(docker port "$broker_id")"
 test -z "$(docker port "$processor_id")"
+docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$processor_id" \
+  | grep -qx 'PROCESSOR_QUEUE_CAPACITY=1'
 
-run_replay 0 11111111-1111-4111-8111-111111111111 "$unpaced_log" 256 3 256 true
-run_replay 10 22222222-2222-4222-8222-222222222222 "$paced_log" 256 3 256 true
+run_replay 0 11111111-1111-4111-8111-111111111111 "$unpaced_log" 256 4 256 true
+run_replay 10 22222222-2222-4222-8222-222222222222 "$paced_log" 256 4 256 true
 
 set -a
 . "$env_file"
@@ -124,36 +126,22 @@ python3 "$repository_root/tests/verify_phase03_features.py" \
 cat "$unpaced_log"
 cat "$paced_log"
 printf '%s\n' 'Phase 03 real-data feature pipeline and replay-rate invariance: PASS'
+if compose logs signal-processor 2>&1 | grep -q 'processor_queue_overflow'; then
+  printf '%s\n' 'processor queue overflowed during small-queue stress' >&2
+  exit 1
+fi
+test "$(compose ps --status running --quiet signal-processor)" = "$processor_id"
+printf '%s\n' 'Phase 03 queue-capacity=1 broker backpressure stress: PASS'
 
 if test "${PHASE03_FULL_REPLAY:-false}" = true; then
   full_run_id=33333333-3333-4333-8333-333333333333
-  run_replay 0 "$full_run_id" "$full_log" 0 746 62169 false
-  grep -q '"feature_count":746' "$full_log"
+  run_replay 0 "$full_run_id" "$full_log" 0 747 62169 false
+  grep -q '"feature_count":747' "$full_log"
   grep -q '"first_window_index":0' "$full_log"
-  grep -q '"last_window_index":745' "$full_log"
+  grep -q '"last_window_index":746' "$full_log"
+  grep -q '"last_sample_count":45' "$full_log"
+  grep -q '"last_quality_flags":\["incomplete_window"\]' "$full_log"
   cat "$full_log"
-  printf '%s\n' 'Phase 03 full-recording feature delivery: PASS'
-
-  compose run --rm --no-deps -T \
-    -e EXPECTED_RUN_ID="$full_run_id" \
-    -e EXPECTED_FEATURES=1 \
-    -e EXPECTED_FIRST_WINDOW_INDEX=746 \
-    -e SUBSCRIBER_TIMEOUT_SECONDS=60 \
-    feature-subscriber >"$partial_log" 2>&1 &
-  subscriber_pid=$!
-  wait_for_subscriber "$partial_log"
-  compose stop --timeout 15 signal-processor >/dev/null
-  if ! wait "$subscriber_pid"; then
-    subscriber_pid=
-    cat "$partial_log" >&2
-    compose logs signal-processor >&2
-    exit 1
-  fi
-  subscriber_pid=
-  grep -q '"feature_count":1' "$partial_log"
-  grep -q '"first_window_index":746' "$partial_log"
-  grep -q '"last_window_index":746' "$partial_log"
-  grep -q '"incomplete_window"' "$partial_log"
-  cat "$partial_log"
-  printf '%s\n' 'Phase 03 graceful final-window flush: PASS'
+  test "$(compose ps --status running --quiet signal-processor)" = "$processor_id"
+  printf '%s\n' 'Phase 03 full-recording end-of-run feature delivery: PASS'
 fi

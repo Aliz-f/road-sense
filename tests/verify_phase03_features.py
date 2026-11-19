@@ -58,7 +58,7 @@ def reference_windows(
 
     completed: list[dict[str, object]] = []
     final_index = max(windows)
-    for window_index in sorted(index for index in windows if index != final_index):
+    for window_index in sorted(windows):
         magnitudes = windows[window_index]
         baseline = float(statistics.median(magnitudes))
         deviations = [value - baseline for value in magnitudes]
@@ -74,7 +74,9 @@ def reference_windows(
                 ),
                 "peak_deviation_mg": max(abs(value) for value in deviations),
                 "baseline_magnitude_mg": baseline,
-                "quality_flags": [],
+                "quality_flags": (
+                    ["incomplete_window"] if window_index == final_index else []
+                ),
             }
         )
     return completed

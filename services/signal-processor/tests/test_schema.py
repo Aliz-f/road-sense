@@ -3,7 +3,11 @@ from __future__ import annotations
 import json
 import unittest
 
-from signal_processor.schema import parse_raw_message, validate_feature_payload
+from signal_processor.schema import (
+    parse_raw_message,
+    parse_run_complete_message,
+    validate_feature_payload,
+)
 
 
 class SchemaTests(unittest.TestCase):
@@ -34,6 +38,26 @@ class SchemaTests(unittest.TestCase):
         }
         with self.assertRaisesRegex(ValueError, "unknown value"):
             validate_feature_payload(feature)
+
+    def test_validates_run_complete_counts(self) -> None:
+        completion = {
+            "schema_version": 1,
+            "event": "run_complete",
+            "run_id": "97038d67-ca67-4202-b7b6-9439c1e64082",
+            "session_id": "session",
+            "sensor_id": "sensor",
+            "source_archive_sha256": "a" * 64,
+            "source_member": "imu.csv",
+            "raw_message_count": 2,
+            "sample_count": 10,
+            "last_sequence_id": 1,
+            "last_sample_index": 9,
+        }
+        parsed = parse_run_complete_message(json.dumps(completion).encode())
+        self.assertEqual(parsed.raw_message_count, 2)
+        completion["last_sequence_id"] = 4
+        with self.assertRaisesRegex(ValueError, "last_sequence_id"):
+            parse_run_complete_message(json.dumps(completion).encode())
 
 
 if __name__ == "__main__":

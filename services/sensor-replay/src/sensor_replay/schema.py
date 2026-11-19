@@ -44,6 +44,35 @@ def build_raw_payload(
     return payload
 
 
+def build_run_complete_payload(
+    *,
+    run_id: str,
+    session_id: str,
+    sensor_id: str,
+    source_archive_sha256: str,
+    source_member: str,
+    raw_message_count: int,
+    sample_count: int,
+) -> dict[str, object]:
+    if raw_message_count <= 0 or sample_count <= 0:
+        raise ValueError("cannot complete an empty replay")
+    payload: dict[str, object] = {
+        "schema_version": 1,
+        "event": "run_complete",
+        "run_id": run_id,
+        "session_id": session_id,
+        "sensor_id": sensor_id,
+        "source_archive_sha256": source_archive_sha256,
+        "source_member": source_member,
+        "raw_message_count": raw_message_count,
+        "sample_count": sample_count,
+        "last_sequence_id": raw_message_count - 1,
+        "last_sample_index": sample_count - 1,
+    }
+    validate_run_complete_payload(payload)
+    return payload
+
+
 def encode_payload(payload: dict[str, object], max_payload_bytes: int) -> bytes:
     encoded = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8")
     if len(encoded) > max_payload_bytes:
@@ -96,3 +125,37 @@ def validate_raw_payload(payload: object) -> None:
             value = sample[axis]
             if not isinstance(value, int) or isinstance(value, bool):
                 raise ValueError(f"{axis} must be an integer")
+
+
+def validate_run_complete_payload(payload: object) -> None:
+    if not isinstance(payload, dict):
+        raise ValueError("run-complete payload must be an object")
+    if payload.get("schema_version") != 1:
+        raise ValueError("schema_version must be 1")
+    if payload.get("event") != "run_complete":
+        raise ValueError("event must be run_complete")
+    try:
+        uuid.UUID(str(payload.get("run_id")))
+    except (ValueError, TypeError, AttributeError) as error:
+        raise ValueError("run_id must be a UUID") from error
+    for field in ("session_id", "sensor_id", "source_member"):
+        if not isinstance(payload.get(field), str) or not payload[field]:
+            raise ValueError(f"{field} must be a non-empty string")
+    source_hash = payload.get("source_archive_sha256")
+    if not isinstance(source_hash, str) or not SHA256_PATTERN.fullmatch(source_hash):
+        raise ValueError("source_archive_sha256 must be lowercase SHA-256")
+    for field in (
+        "raw_message_count",
+        "sample_count",
+        "last_sequence_id",
+        "last_sample_index",
+    ):
+        value = payload.get(field)
+        if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+            raise ValueError(f"{field} must be a non-negative integer")
+    if payload["raw_message_count"] <= 0 or payload["sample_count"] <= 0:
+        raise ValueError("run-complete counts must be positive")
+    if payload["last_sequence_id"] != payload["raw_message_count"] - 1:
+        raise ValueError("last_sequence_id does not match raw_message_count")
+    if payload["last_sample_index"] != payload["sample_count"] - 1:
+        raise ValueError("last_sample_index does not match sample_count")

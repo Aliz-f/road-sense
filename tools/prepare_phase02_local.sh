@@ -80,6 +80,7 @@ if test "$force" = true || ! test -s "$phase02_env"; then
     printf 'MQTT_RUNTIME_DIR=%s\n' "$runtime_dir"
     printf 'MQTT_TOPIC=roadsense/v1/imu/raw\n'
     printf 'MQTT_RAW_TOPIC=roadsense/v1/imu/raw\n'
+    printf 'MQTT_RUN_COMPLETE_TOPIC=roadsense/v1/imu/run-complete\n'
     printf 'MQTT_FEATURE_TOPIC=roadsense/v1/imu/features\n'
     printf 'PROCESSOR_MQTT_CLIENT_ID=roadsense-signal-processor-local\n'
     printf 'PROCESSOR_QUEUE_CAPACITY=1024\n'

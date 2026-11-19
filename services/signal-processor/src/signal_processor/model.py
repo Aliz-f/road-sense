@@ -38,6 +38,16 @@ class RawBatch:
     digest: str
 
 
+@dataclass(frozen=True, slots=True)
+class RunCompletion:
+    metadata: RunMetadata
+    raw_message_count: int
+    sample_count: int
+    last_sequence_id: int
+    last_sample_index: int
+    digest: str
+
+
 @dataclass(slots=True)
 class Window:
     window_index: int
