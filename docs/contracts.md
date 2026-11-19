@@ -54,9 +54,30 @@ For each accepted acceleration vector:
 
 This v1 definition is orientation-robust but exploratory. It removes a per-window magnitude baseline; it is not a calibrated gravity solution or a pothole/safety metric.
 
-Required feature fields are schema_version=1, run_id, session_id, sensor_id, window_index, source_start, source_end, sample_count, vibration_rms_mg, peak_deviation_mg, baseline_magnitude_mg, baseline_method=window_magnitude_median, quality_flags, and algorithm_version. The feature idempotency key is (run_id, window_index, algorithm_version).
+Required feature fields are schema_version=1, run_id, session_id, sensor_id,
+source_archive_sha256, source_member, window_index, source_start, source_end,
+sample_count, vibration_rms_mg, peak_deviation_mg, baseline_magnitude_mg,
+baseline_method=window_magnitude_median, quality_flags, and
+algorithm_version=roadsense-vibration-v1. source_start is the inclusive
+source-time window boundary and source_end is the exclusive boundary exactly
+one second later. Source archive/member provenance is carried through from the
+raw batch. The feature idempotency key is (run_id, window_index,
+algorithm_version).
 
-quality_flags is an array. Defined v1 values are source_time_gap, source_time_non_monotonic, incomplete_window, and invalid_sample. The inspected cadence has a 12 ms median; an adjacent interval greater than 18 ms is a gap for these sessions. Invalid values are not silently coerced. Phase 03 tests must cover partial final windows, gaps, and replay-rate invariance.
+quality_flags is an ordered array. Defined v1 values are source_time_gap,
+source_time_non_monotonic, incomplete_window, and invalid_sample. The inspected
+cadence has a 12 ms median; an adjacent interval greater than 18 ms, a missing
+sequence, or a missing sample index is a source_time_gap. Exact QoS 1 batch and
+sample duplicates are ignored. Conflicting reuse of an idempotency key is
+rejected. Non-monotonic or invalid samples are not silently coerced or
+interpolated; they are skipped and the affected window is flagged.
+
+A window is emitted as complete only after an accepted sample reaches a later
+source-time window. The still-open window is emitted with incomplete_window on
+an explicit graceful processor shutdown. Wall-clock inactivity is not a run
+boundary because it would make results depend on replay rate or broker delays.
+Phase 03 tests cover partial final windows, gaps, duplicates, invalid samples,
+and replay-rate invariance.
 
 ## CAN SPEED gate
 

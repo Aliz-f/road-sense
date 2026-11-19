@@ -1,8 +1,9 @@
 # RoadSense — MUHOS Distributed Vehicle Vibration Monitoring
 
-> **LOCAL PHASE 02** — verified data and Docker foundations now include a local
-> Sensor Replay → authenticated TLS MQTT pipeline. **No signal processing,
-> persistence, API/UI, remote deployment, or cloud resource exists yet.**
+> **LOCAL PHASE 03** — the laptop Docker Compose stack now runs verified MUHOS
+> Sensor Replay → authenticated TLS MQTT → source-time Signal Processor.
+> **No persistence, analyzer, API/UI, remote deployment, or cloud resource
+> exists yet.**
 
 RoadSense is a Software Defined Systems final-project design. It replays [MUHOS](https://m3s-kuura.github.io/muhos-dataset/) Bosch IMU measurements to explore vehicle vibration patterns in a distributed system. Vibration alerts are exploratory metrics, **not validated pothole or road-safety detection**.
 
@@ -51,7 +52,7 @@ Each phase document contains a **goal, prerequisites, tasks for Codex, deliverab
 ## Planned structure
 
 - `services/sensor-replay` — VPS Python/Pandas MQTT feeder
-- `services/signal-processor` — Rahti Python/NumPy/SciPy feature calculation
+- `services/signal-processor` — Python source-time vibration feature calculation
 - `services/road-analyzer` — Rahti Python rules and PostgreSQL writing
 - `services/api` — Rahti FastAPI REST
 - `services/dashboard` — VPS Streamlit/Plotly
@@ -59,7 +60,7 @@ Each phase document contains a **goal, prerequisites, tasks for Codex, deliverab
 - `infrastructure/compose` — local/VPS Docker Compose
 - `infrastructure/rahti` — Kubernetes/OpenShift manifests
 - `data` — acquisition docs, **not recordings**
-- `tests` — future validation
+- `tests` — local cross-service validation
 
 ## Scope and key decisions
 
@@ -69,5 +70,5 @@ MVP: replay one verified Bosch IMU CSV recording; compute time-window vibration 
 
 Data source: [MUHOS documentation](https://m3s-kuura.github.io/muhos-dataset/). License, citation, schema, timestamps and units must be verified from actual downloaded files before implementation. Never commit raw archives or credentials.
 
-**Next action:** begin [Phase 03](phases/03-signal-processing.md) only after
-reviewing the completed Phase 02 report and explicitly selecting that phase.
+**Next action:** begin [Phase 04](phases/04-analyzer-storage.md) only after
+reviewing the completed Phase 03 report and explicitly selecting that phase.
