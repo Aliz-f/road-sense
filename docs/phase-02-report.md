@@ -20,7 +20,9 @@ remain out of scope.
 - Playback is based on source time. `REPLAY_RATE=1` is recorded speed, positive
   values scale it, and `0` is an unpaced validation mode. SIGINT/SIGTERM use a
   shared stop event; MQTT connection attempts are bounded/retried and QoS 1
-  publish acknowledgements are awaited.
+  publish acknowledgements are awaited. After startup, only Paho's network
+  loop initiates reconnects; publish retries wait for that loop instead of
+  racing it with a second `connect()` call.
 - Mosquitto 2.0.22 uses a digest-pinned image, anonymous access disabled, a
   generated password file/ACL, and locally generated TLS certificates. It has
   no host-published port and is reachable only on the internal Compose network.
@@ -59,6 +61,12 @@ Fast real-data integration and complete recording replay:
 PHASE02_FULL_REPLAY=true ./tests/phase02_e2e.sh
 ```
 
+Real broker interruption and automatic reconnection:
+
+```sh
+./tests/phase02_reconnect_e2e.sh
+```
+
 Manual broker/replay/cleanup:
 
 ```sh
@@ -73,19 +81,22 @@ docker compose --env-file config/environments/local/.env.phase02 \
 
 ## Tests and sanitized evidence
 
-The containerized unit suite ran 17 tests covering:
+The corrected Phase 02 suite was rerun locally on 2026-11-19. The
+containerized unit suite covers:
 
 - archive hash/member/header validation and actual source field parsing;
 - invalid, non-UTC, duplicate, and non-increasing timestamps;
 - blank/non-integer values, sample limits, and bounded batch tails;
 - raw schema, UUID/sequence checks, payload byte cap, and contiguous samples;
 - replay-rate scheduling, stop behavior, connection retries/exhaustion, and
-  shutdown cancellation.
+  shutdown cancellation;
+- serialized concurrent startup and the invariant that publish retries never
+  invoke a competing MQTT `connect()` after the network loop starts.
 
 Sanitized result:
 
 ```text
-Ran 17 tests
+Ran 19 tests
 OK
 authenticated broker rejection check: PASS
 anonymous broker rejection check: PASS
@@ -101,6 +112,41 @@ subscriber_complete last_sample_index=62168 messages=972 samples=62169
 Phase 02 real-data MQTT end-to-end: PASS
 Phase 02 full-replay cleanup: PASS
 ```
+
+The interruption test publishes 1,024 actual samples at a paced rate, pauses
+the publisher after acknowledged batches, stops and starts the real Mosquitto
+container, waits for the independent subscriber to resubscribe, then resumes
+the publisher. It requires both publisher disconnect/reconnect events and the
+complete contiguous 64-message stream:
+
+```text
+mqtt_disconnected
+mqtt_reconnected
+subscriber_complete messages=64 samples=1024 last_sample_index=1023
+Phase 02 broker interruption/reconnection: PASS
+```
+
+Final regression summary:
+
+```text
+unit tests: 19 passed
+quick real-data replay: 2 messages / 128 samples — PASS
+broker stop/start replay: 64 messages / 1,024 samples — PASS
+full real-data replay: 972 messages / 62,169 samples — PASS
+authenticated rejection: PASS
+anonymous rejection: PASS
+```
+
+## Selecting other verified recordings
+
+The archive name, tar member, SHA-256, and session ID form one provenance
+tuple. All four values must be selected together; mixing them is invalid. The
+safe tuples and a copyable Compose override are documented in
+`services/sensor-replay/README.md`. In particular, Highway uses
+`imu/bosch.csv`, while Bumpy gravel and Paved road use
+`imu/bosch_imu.csv`. Archive hashing, member lookup, and exact-header checks
+fail closed. The three files keep `SENSOR_ID=bosch-xdk-110`; CAN is not
+selectable because SPEED units remain unverified.
 
 The independent subscriber validated every unique payload, one stable `run_id`,
 contiguous sequence/sample indexes, schema fields, first timestamp, and total
@@ -119,6 +165,9 @@ were not stopped or modified.
 - Development certificates are intentionally local/short-lived. Phase 06 must
   use approved externally managed certificates and revalidate Rahti ingress;
   this phase makes no claim about remote TLS support.
+- The tracked local environment example now points clients at the mounted
+  issuing CA, `/run/roadsense/mqtt/ca.crt`, rather than the broker leaf
+  certificate.
 - Generated images remain in the local Docker cache. Containers and networks
   are removed by test cleanup. Optional image rollback is:
 
