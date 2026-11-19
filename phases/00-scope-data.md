@@ -1,6 +1,9 @@
 # Phase 00 — Inspect MUHOS, confirm course scope, and prepare development decisions
 
-**Status:** Not started as a Codex implementation phase. Previous exploratory inspection in conversation does not substitute for a committed, reproducible dataset profile.
+**Status:** Completed on 2026-11-19 in branch `phase/00-scope-data`.
+The reproducible evidence is in `docs/dataset-profile.md`,
+`tools/inspect_muhos.py`, and `docs/assets/muhos-imu-summary.svg`. Phase 01 has
+not started.
 
 ## Goal
 Understand the real IMU/CAN data and confirm the local-laptop → VPS + Rahti development/deployment workflow is aligned with the official course submission requirements.
@@ -21,11 +24,18 @@ Official course Final-Project README; MUHOS archives already obtained by the stu
 `docs/dataset-profile.md`, source file provenance, data dictionary, source plots/inspection script when authorized, clear course submission checklist, verified/uncertain data fields.
 
 ## Exit checklist
-- [ ] Real filenames, units, timestamps, sampling summary and missing-data policy documented.
-- [ ] License and attribution recorded.
-- [ ] Full local Compose plan and later VPS/Rahti topology documented.
-- [ ] Course submission conditions checked without making unverified assertions.
-- [ ] No raw archives, tokens or credentials committed to public GitHub.
+- [x] Real filenames, units, timestamps, sampling summary and missing-data policy documented.
+- [x] License and attribution recorded.
+- [x] Full local Compose plan and later VPS/Rahti topology documented.
+- [x] Course submission conditions checked without making unverified assertions.
+- [x] No raw archives, tokens or credentials committed to public GitHub.
+
+Validation command and result are recorded in `docs/dataset-profile.md`. The
+inspector regenerated its JSON summary and byte-identical SVG; profile
+assertions, SVG parsing, `git diff --check`, ignore checks, and the out-of-scope
+service/infrastructure change check passed. Docker daemon connectivity remains
+unverified because this session could not access its socket; no installation or
+configuration change was attempted.
 
 ## Codex request
 Implement **only Phase 00**, first reading AGENTS.md and the architecture/data-contract docs. Inspect the actual provided MUHOS archives on the laptop and document results. Do not deploy, create application microservices, or advance automatically.
