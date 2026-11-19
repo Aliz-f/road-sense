@@ -37,6 +37,14 @@ have no host ports and use read-only container filesystems. PostgreSQL is
 internal-only and uses the named `roadsense-local-postgres-data` volume. API and
 dashboard remain future phases.
 
+The analyzer commits each event and its MQTT outbox payload atomically, then
+publishes pending rows with QoS 1 and records completion. This closes the
+database-commit/publication loss window while retaining deterministic
+at-least-once event IDs. Rule versions are bound to exact heuristic semantics
+and thresholds. Mosquitto stores the durable analyzer session and queued QoS 1
+features in `roadsense-local-mqtt-data`, so broker and analyzer restarts do not
+discard queued Phase 04 work.
+
 ## Final deployed communication
 ```text
 PERSONAL VPS                                CSC RAHTI

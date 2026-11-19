@@ -46,4 +46,11 @@ class SessionRecord:
 @dataclass(frozen=True, slots=True)
 class StoreResult:
     duplicate: bool
-    event_payload: dict[str, object] | None
+    event_detected: bool
+
+
+@dataclass(frozen=True, slots=True)
+class OutboxEvent:
+    event_id: str
+    payload: dict[str, object]
+    publish_attempts: int

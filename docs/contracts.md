@@ -129,6 +129,11 @@ window index and source bounds, `algorithm_version`,
 feature's ordered `quality_flags`. The event idempotency key is
 `(run_id, window_index, algorithm_version, rule_version)`. Event delivery is
 at least once; consumers use `event_id` to collapse exact MQTT duplicates.
+The database transaction creates the event and its publication-outbox row
+together. The analyzer retries pending rows on startup and while running, so a
+committed event does not depend on feature redelivery. A crash after the broker
+accepts QoS 1 but before the outbox mark can publish the same deterministic
+event again.
 These are exploratory vehicle-vibration events, not validated potholes, road
 defects, or safety classifications.
 
@@ -147,12 +152,20 @@ defects, or safety classifications.
 - `events`: deterministic event UUID plus unique
   `(run_id, window_index, algorithm_version, rule_version)`, feature reference,
   heuristic/rule, severity, threshold/observed values, and payload SHA-256.
+- `heuristic_rules`: immutable binding from `rule_version` to heuristic type,
+  comparison algorithm, event type, severity, and exact finite positive
+  threshold. Events reference the complete rule configuration.
+- `event_outbox`: one JSON payload per event UUID, publication attempts, last
+  error/attempt, and nullable `published_at`. It commits with the event and is
+  drained with QoS 1 at-least-once semantics.
 - `schema_migrations`: applied file name, immutable checksum, and timestamp.
 
 Feature/event persistence is one database transaction. Exact QoS 1 feature
 duplicates reuse existing rows. A duplicate key with different canonical
 content or provenance is rejected rather than overwritten. The named local
 PostgreSQL volume persists across container recreation and has no host port.
+Composite foreign keys ensure that run/session/sensor, feature/run/algorithm,
+event/feature/observation, and event/rule values cannot drift independently.
 
 ## API (proposed)
 

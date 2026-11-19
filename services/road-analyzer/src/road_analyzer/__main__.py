@@ -26,6 +26,7 @@ def main() -> int:
         config = AnalyzerConfig.from_environment()
         registry = SessionRegistry.load(config.session_registry_file)
         store = AnalyzerStore.connect_with_retry(config)
+        store.register_rule()
         service = MqttRoadAnalyzer(config, registry, store, stop_event)
         service.start()
         service.run()

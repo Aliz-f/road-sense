@@ -9,17 +9,29 @@ import statistics
 import sys
 import tarfile
 import threading
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import paho.mqtt.client as mqtt
 import psycopg
 
 from road_analyzer.config import AnalyzerConfig
-from road_analyzer.schema import parse_feature_message
+from road_analyzer.registry import SessionRegistry
+from road_analyzer.schema import digest, parse_feature_message
+from road_analyzer.storage import AnalyzerStore
 
 
 EXPECTED_EVENT_WINDOWS = [13, 14, 15, 16, 18]
+
+
+def database_connection(config: AnalyzerConfig) -> psycopg.Connection:
+    last_error = None
+    for password in config.postgres_password_candidates():
+        try:
+            return psycopg.connect(config.postgres_dsn(password))
+        except psycopg.OperationalError as error:
+            last_error = error
+    raise ConnectionError("integration helper could not authenticate to PostgreSQL") from last_error
 
 
 def format_timestamp(value: datetime) -> str:
@@ -59,6 +71,8 @@ def reference_features(archive: Path, member: str, max_samples: int) -> list[dic
         result.append(
             {
                 "window_index": window_index,
+                "source_start": format_timestamp(anchor + timedelta(seconds=window_index)),
+                "source_end": format_timestamp(anchor + timedelta(seconds=window_index + 1)),
                 "sample_count": len(magnitudes),
                 "vibration_rms_mg": math.sqrt(
                     sum(value * value for value in deviations) / len(deviations)
@@ -71,17 +85,72 @@ def reference_features(archive: Path, member: str, max_samples: int) -> list[dic
     return result
 
 
+def reference_payload(run_id: str, window_index: int = 13) -> dict[str, object]:
+    archive = Path("/data/archives") / os.environ.get(
+        "ROADSENSE_MVP_ARCHIVE", "Bumpy Gravel - imu.tar"
+    )
+    member = os.environ.get("ROADSENSE_MVP_MEMBER", "imu/bosch_imu.csv")
+    feature = next(
+        item for item in reference_features(archive, member, 1536)
+        if item["window_index"] == window_index
+    )
+    return {
+        "schema_version": 1,
+        "run_id": run_id,
+        "session_id": "bumpy-gravel-20261019",
+        "sensor_id": "bosch-xdk-110",
+        "source_archive_sha256": "91d37ad4de7106d5038ed7bffe1e373db65e0f4771865da8975a216e76ed34f3",
+        "source_member": member,
+        "window_index": feature["window_index"],
+        "source_start": feature["source_start"],
+        "source_end": feature["source_end"],
+        "sample_count": feature["sample_count"],
+        "vibration_rms_mg": feature["vibration_rms_mg"],
+        "peak_deviation_mg": feature["peak_deviation_mg"],
+        "baseline_magnitude_mg": feature["baseline_magnitude_mg"],
+        "baseline_method": "window_magnitude_median",
+        "quality_flags": feature["quality_flags"],
+        "algorithm_version": "roadsense-vibration-v1",
+    }
+
+
 def verify(config: AnalyzerConfig, run_id: str) -> None:
     archive = Path("/data/archives") / os.environ.get(
         "ROADSENSE_MVP_ARCHIVE", "Bumpy Gravel - imu.tar"
     )
     member = os.environ.get("ROADSENSE_MVP_MEMBER", "imu/bosch_imu.csv")
     expected = reference_features(archive, member, 1536)
-    with psycopg.connect(config.postgres_dsn) as connection:
+    with database_connection(config) as connection:
         with connection.cursor() as cursor:
             cursor.execute("SELECT count(*) FROM schema_migrations")
-            if cursor.fetchone()[0] != 1:
-                raise AssertionError("expected exactly one applied migration")
+            if cursor.fetchone()[0] != 5:
+                raise AssertionError("expected exactly five applied migrations")
+            cursor.execute(
+                """
+                SELECT e.payload_sha256, o.payload
+                FROM events e JOIN event_outbox o USING (event_id)
+                WHERE e.created_at < (
+                  SELECT applied_at FROM schema_migrations
+                  WHERE version='0002_phase04_reliability.sql'
+                )
+                """
+            )
+            for payload_sha256, payload in cursor.fetchall():
+                if digest(payload) != payload_sha256:
+                    raise AssertionError("legacy outbox payload is not canonical")
+            cursor.execute(
+                """
+                SELECT heuristic_type, comparison_algorithm, event_type, severity,
+                       threshold_vibration_rms_mg
+                FROM heuristic_rules WHERE rule_version=%s
+                """,
+                (config.rule_version,),
+            )
+            if cursor.fetchone() != (
+                "vibration_rms_threshold", "vibration_rms_gte", "high_vibration",
+                "high", config.vibration_rms_threshold_mg,
+            ):
+                raise AssertionError("configured heuristic rule was not bound immutably")
             cursor.execute(
                 """
                 SELECT sensor_id, source_archive_sha256, source_member, row_count,
@@ -141,6 +210,16 @@ def verify(config: AnalyzerConfig, run_id: str) -> None:
             event_windows = [row[0] for row in cursor.fetchall()]
             if event_windows != EXPECTED_EVENT_WINDOWS:
                 raise AssertionError(f"event windows mismatch: {event_windows}")
+            cursor.execute(
+                """
+                SELECT count(*), count(*) FILTER (WHERE published_at IS NOT NULL)
+                FROM event_outbox o JOIN events e USING (event_id)
+                WHERE e.run_id=%s
+                """,
+                (run_id,),
+            )
+            if cursor.fetchone() != (len(EXPECTED_EVENT_WINDOWS), len(EXPECTED_EVENT_WINDOWS)):
+                raise AssertionError("event outbox is incomplete or has pending rows")
     print(
         json.dumps(
             {
@@ -157,7 +236,7 @@ def verify(config: AnalyzerConfig, run_id: str) -> None:
 
 
 def load_feature(config: AnalyzerConfig, run_id: str, window_index: int) -> dict[str, object]:
-    with psycopg.connect(config.postgres_dsn) as connection:
+    with database_connection(config) as connection:
         with connection.cursor() as cursor:
             cursor.execute(
                 """
@@ -230,9 +309,43 @@ def publish(config: AnalyzerConfig, payload: dict[str, object]) -> None:
         client.loop_stop()
 
 
+def store_direct(config: AnalyzerConfig, run_id: str) -> None:
+    feature = parse_feature_message(json.dumps(reference_payload(run_id)).encode("utf-8"))
+    registry = SessionRegistry.load(config.session_registry_file)
+    store = AnalyzerStore.connect_with_retry(config)
+    try:
+        store.register_rule()
+        result = store.store_feature(feature, registry.match(feature))
+        if result.duplicate or not result.event_detected:
+            raise AssertionError("direct outbox fixture was not a new detected event")
+    finally:
+        store.close()
+
+
+def verify_single(config: AnalyzerConfig, run_id: str, published: bool = True) -> None:
+    with database_connection(config) as connection:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT count(*) FROM feature_windows WHERE run_id=%s", (run_id,))
+            if cursor.fetchone()[0] != 1:
+                raise AssertionError("expected one stored recovery feature")
+            cursor.execute(
+                """
+                SELECT count(*), count(*) FILTER (WHERE o.published_at IS NOT NULL)
+                FROM events e JOIN event_outbox o USING (event_id)
+                WHERE e.run_id=%s
+                """,
+                (run_id,),
+            )
+            expected_published = 1 if published else 0
+            if cursor.fetchone() != (1, expected_published):
+                raise AssertionError("unexpected recovery event/outbox state")
+    print(json.dumps({"event": "phase04_single_verified", "run_id": run_id,
+                      "published": published}), flush=True)
+
+
 def main() -> int:
     if len(sys.argv) < 3:
-        print("usage: integration_helper.py verify|duplicate|conflict RUN_ID", file=sys.stderr)
+        print("usage: integration_helper.py COMMAND RUN_ID", file=sys.stderr)
         return 2
     command, run_id = sys.argv[1:3]
     config = AnalyzerConfig.from_environment()
@@ -244,6 +357,16 @@ def main() -> int:
             payload["vibration_rms_mg"] = float(payload["vibration_rms_mg"]) + 1.0
         publish(config, payload)
         print(json.dumps({"event": f"phase04_{command}_published", "run_id": run_id}), flush=True)
+    elif command == "publish-reference":
+        publish(config, reference_payload(run_id))
+        print(json.dumps({"event": "phase04_reference_published", "run_id": run_id}), flush=True)
+    elif command == "store-direct":
+        store_direct(config, run_id)
+        print(json.dumps({"event": "phase04_outbox_fixture_stored", "run_id": run_id}), flush=True)
+    elif command == "verify-single":
+        verify_single(config, run_id)
+    elif command == "verify-single-pending":
+        verify_single(config, run_id, published=False)
     else:
         raise ValueError(f"unknown integration helper command: {command}")
     return 0

@@ -4,6 +4,7 @@ import json
 import queue
 import ssl
 import threading
+import time
 from dataclasses import dataclass
 
 import paho.mqtt.client as mqtt
@@ -146,6 +147,27 @@ class MqttRoadAnalyzer:
             window_index=event_payload["window_index"],
         )
 
+    def _drain_outbox(self) -> bool:
+        """Publish committed events. False means retry later; rows remain pending."""
+        try:
+            pending = self.store.fetch_pending_events()
+        except ConnectionError as error:
+            emit_error("event_outbox_read_failed", error)
+            return False
+        for item in pending:
+            try:
+                self._publish_event(item.payload)
+                self.store.mark_event_published(item.event_id)
+            except Exception as error:
+                emit_error("event_publish_deferred", error, event_id=item.event_id)
+                try:
+                    self.store.record_event_publish_failure(item.event_id, error)
+                except Exception as record_error:
+                    emit_error("event_publish_failure_record_failed", record_error,
+                               event_id=item.event_id)
+                return False
+        return True
+
     def _handle(self, message: QueuedMessage) -> None:
         try:
             feature = parse_feature_message(message.payload)
@@ -166,21 +188,26 @@ class MqttRoadAnalyzer:
             )
             self._ack(message)
             return
-        if result.event_payload is not None:
-            self._publish_event(result.event_payload)
+        self._drain_outbox()
         emit(
             "feature_duplicate" if result.duplicate else "feature_stored",
             run_id=feature.run_id,
             window_index=feature.window_index,
             mqtt_duplicate=message.duplicate_delivery,
-            event_detected=result.event_payload is not None,
+            event_detected=result.event_detected,
         )
         self._ack(message)
 
     def run(self) -> None:
+        next_outbox_poll = 0.0
         while not self.stop_event.is_set() or not self.messages.empty():
+            now = time.monotonic()
+            if now >= next_outbox_poll:
+                self._drain_outbox()
+                next_outbox_poll = now + self.config.outbox_poll_seconds
             try:
-                message = self.messages.get(timeout=0.2)
+                timeout = min(0.2, max(0.01, next_outbox_poll - time.monotonic()))
+                message = self.messages.get(timeout=timeout)
             except queue.Empty:
                 continue
             self._handle(message)

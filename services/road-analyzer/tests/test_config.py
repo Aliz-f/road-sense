@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import tempfile
 import unittest
 from unittest.mock import patch
 
@@ -40,6 +41,41 @@ class ConfigTests(unittest.TestCase):
         with patch.dict(os.environ, env, clear=True):
             with self.assertRaisesRegex(ValueError, "POSTGRES_PASSWORD"):
                 AnalyzerConfig.from_environment()
+
+    def test_direct_and_file_password_are_mutually_exclusive(self) -> None:
+        env = {**BASE_ENV, "POSTGRES_PASSWORD_FILE": "/password"}
+        with patch.dict(os.environ, env, clear=True):
+            with self.assertRaisesRegex(ValueError, "only one"):
+                AnalyzerConfig.from_environment()
+
+    def test_password_file_is_read_each_time_and_falls_back_during_rotation(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            current = os.path.join(directory, "password")
+            previous = os.path.join(directory, "password.previous")
+            with open(current, "w", encoding="utf-8") as stream:
+                stream.write("current\n")
+            with open(previous, "w", encoding="utf-8") as stream:
+                stream.write("fallback\n")
+            env = {key: value for key, value in BASE_ENV.items() if key != "POSTGRES_PASSWORD"}
+            env.update({"POSTGRES_PASSWORD_FILE": current,
+                        "POSTGRES_PREVIOUS_PASSWORD_FILE": previous})
+            with patch.dict(os.environ, env, clear=True):
+                config = AnalyzerConfig.from_environment()
+            self.assertEqual(config.postgres_password_candidates(), ("current", "fallback"))
+            with open(current, "w", encoding="utf-8") as stream:
+                stream.write("rotated\n")
+            self.assertEqual(config.postgres_password_candidates(), ("rotated", "fallback"))
+
+    def test_rule_version_and_topics_are_validated(self) -> None:
+        for env_update in (
+            {"ANALYZER_RULE_VERSION": "Rule v1"},
+            {"MQTT_FEATURE_TOPIC": "roadsense/+/features"},
+            {"MQTT_FEATURE_TOPIC": "roadsense/v1/events"},
+        ):
+            with self.subTest(env_update=env_update):
+                with patch.dict(os.environ, {**BASE_ENV, **env_update}, clear=True):
+                    with self.assertRaises(ValueError):
+                        AnalyzerConfig.from_environment()
 
 
 if __name__ == "__main__":

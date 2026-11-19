@@ -3,6 +3,7 @@ flowchart TB
     LD["Private MUHOS CSV files"]
     LF["sensor-replay"]
     LM["Mosquitto"]
+    LMQ[("Persistent MQTT sessions")]
     LP["signal-processor"]
     LA["road-analyzer"]
     LDB[("PostgreSQL")]
@@ -13,7 +14,10 @@ flowchart TB
     LM -->|"raw + run-complete"| LP
     LP -->|"features via MQTT"| LM
     LM -->|"feature topic"| LA
-    LA --> LDB --> LAPI --> LUI
+    LM --> LMQ
+    LA -->|"events via MQTT QoS 1"| LM
+    LA -->|"sessions, runs, features, events + outbox"| LDB
+    LDB --> LAPI --> LUI
   end
 
   subgraph VPS["PHASE 06: PERSONAL VPS — Docker Compose"]

@@ -5,6 +5,8 @@ repository_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 phase01_env="$repository_root/config/environments/local/.env"
 phase02_env="$repository_root/config/environments/local/.env.phase02"
 runtime_dir="$repository_root/config/environments/local/runtime/mqtt"
+postgres_runtime_dir="$repository_root/config/environments/local/runtime/postgres"
+postgres_password_file="$postgres_runtime_dir/password"
 
 force=false
 if test "${1:-}" = --force; then
@@ -24,7 +26,27 @@ test -r "$dataset_root/Bumpy Gravel - imu.tar"
 command -v openssl >/dev/null
 
 umask 077
-mkdir -p "$runtime_dir"
+mkdir -p "$runtime_dir" "$postgres_runtime_dir"
+chmod 750 "$postgres_runtime_dir"
+
+# Migrate the legacy inline credential once. Thereafter this file is the
+# stable source of truth and --force never changes it.
+if ! test -s "$postgres_password_file"; then
+  legacy_postgres_password=
+  if test -s "$phase02_env"; then
+    legacy_postgres_password=$(sed -n 's/^POSTGRES_PASSWORD=//p' "$phase02_env")
+  fi
+  if test -n "$legacy_postgres_password"; then
+    printf '%s\n' "$legacy_postgres_password" > "$postgres_password_file"
+  elif ! test -s "$phase02_env"; then
+    openssl rand -hex 32 > "$postgres_password_file"
+  else
+    printf '%s\n' 'existing environment has no recoverable PostgreSQL password; refusing to regenerate it' >&2
+    exit 1
+  fi
+  chmod 640 "$postgres_password_file"
+fi
+chmod 640 "$postgres_password_file"
 
 certificate_valid=false
 if test -s "$runtime_dir/ca.crt" && test -s "$runtime_dir/server.crt" && \
@@ -94,7 +116,8 @@ if test "$force" = true || ! test -s "$phase02_env"; then
     printf 'POSTGRES_PORT=5432\n'
     printf 'POSTGRES_DB=roadsense\n'
     printf 'POSTGRES_USER=roadsense\n'
-    printf 'POSTGRES_PASSWORD=%s\n' "$(openssl rand -hex 24)"
+    printf 'POSTGRES_PASSWORD_FILE=/run/roadsense/postgres/password\n'
+    printf 'POSTGRES_PREVIOUS_PASSWORD_FILE=/run/roadsense/postgres/password.previous\n'
     printf 'POSTGRES_CONNECT_TIMEOUT_SECONDS=5\n'
     printf 'POSTGRES_CONNECT_RETRIES=30\n'
     printf 'MQTT_CONNECT_RETRIES=10\n'
@@ -126,14 +149,13 @@ ensure_setting POSTGRES_HOST postgres
 ensure_setting POSTGRES_PORT 5432
 ensure_setting POSTGRES_DB roadsense
 ensure_setting POSTGRES_USER roadsense
-if grep -q '^POSTGRES_PASSWORD=$' "$phase02_env"; then
-  postgres_password=$(openssl rand -hex 24)
-  sed -i "s/^POSTGRES_PASSWORD=$/POSTGRES_PASSWORD=$postgres_password/" "$phase02_env"
-elif ! grep -q '^POSTGRES_PASSWORD=' "$phase02_env"; then
-  ensure_setting POSTGRES_PASSWORD "$(openssl rand -hex 24)"
-fi
+sed -i '/^POSTGRES_PASSWORD=/d' "$phase02_env"
+ensure_setting POSTGRES_PASSWORD_FILE /run/roadsense/postgres/password
+ensure_setting POSTGRES_PREVIOUS_PASSWORD_FILE /run/roadsense/postgres/password.previous
 ensure_setting POSTGRES_CONNECT_TIMEOUT_SECONDS 5
 ensure_setting POSTGRES_CONNECT_RETRIES 30
+ensure_setting POSTGRES_CONNECT_RETRY_DELAY_SECONDS 1
+ensure_setting ANALYZER_OUTBOX_POLL_SECONDS 1
 chmod 600 "$phase02_env"
 
 openssl verify -CAfile "$runtime_dir/ca.crt" "$runtime_dir/server.crt" >/dev/null
