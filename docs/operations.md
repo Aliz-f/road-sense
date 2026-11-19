@@ -8,6 +8,11 @@
 - Run parser, numeric signal, MQTT, idempotency, REST and UI smoke tests. Do not move to deployment before a full local pass.
 - Debug with `docker compose ps`, `docker compose logs` and controlled replay sessions.
 
+Phase 01 verified the laptop baseline and standalone Compose preflight. Exact
+versions, the private dataset mount convention, loopback port plan, lifecycle
+commands, and troubleshooting are recorded in `local-development.md`. The
+application Compose stack remains deferred to Phases 02–05.
+
 ## Step 2 — Package and publish
 - Build versioned/pinned images from the *same source* tested locally.
 - Push to an approved container registry only after test gates pass.
@@ -29,5 +34,10 @@
 ## Reliability and evidence
 Reconnection/restart tests, run/window IDs and idempotency, structured sanitized logs, persistent volume backup/restore, rollout and rollback instructions. No unapproved remote changes; no production claim before actual deployed end-to-end test.
 
-## Not configured yet
-No local Docker environment, VPS settings or Rahti resources were changed by these planning documents. VPS specifications, domains, actual Rahti TLS support and database quotas remain unverified.
+## Current configuration boundary
+
+The local Docker Desktop daemon and an isolated Phase 01 preflight were
+verified. A private, ignored local dataset-path file was prepared; no daemon
+settings or existing workloads were changed. No application stack is running.
+VPS settings and Rahti resources were not accessed or configured; their
+specifications, domains, TLS support, and quotas remain unverified.
