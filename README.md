@@ -1,87 +1,66 @@
-# RoadSense — MUHOS Vehicle Vibration Monitoring
+# RoadSense — MUHOS Distributed Vehicle Vibration Monitoring
 
-> **Status: PLANNING ONLY.** This repository currently contains documentation and directory guides. No application code, container images, deployments, or cloud resources have been created.
+> **PLANNING ONLY** — documentation, phase specifications, and folder guides are present. **No application code, server changes, deployments, or cloud resources have been created.**
 
-RoadSense is the proposed final project for the University of Oulu **Software Defined Systems** course. It replays recorded vehicle-sensor measurements from the [MUHOS dataset](https://m3s-kuura.github.io/muhos-dataset/) and turns them into vibration summaries and events using independently deployable microservices.
+RoadSense is a Software Defined Systems final-project design. It replays [MUHOS](https://m3s-kuura.github.io/muhos-dataset/) Bosch IMU measurements to explore vehicle vibration patterns in a distributed system. Vibration alerts are exploratory metrics, **not validated pothole or road-safety detection**.
 
-## Key idea
+## Hosting plan
 
-A remote **VPS** acts as the external data-source and presentation node. **CSC Rahti (OpenShift/Kubernetes)** hosts message transport, processing, storage, and the API.
+| VPS — Docker Compose | CSC Rahti — OpenShift/Kubernetes |
+|---|---|
+| Private MUHOS dataset files | Mosquitto MQTT broker |
+| Python Sensor Replay (CSV to MQTT) | Python Signal Processor |
+| Streamlit/Plotly Dashboard | Road Analyzer |
+| Connects outbound using MQTT/TLS and HTTPS | PostgreSQL and FastAPI |
 
-```text
-VPS (Docker Compose)                                  CSC Rahti (OpenShift)
-+------------------------------+                    +-----------------------------------+
-| MUHOS CSV/JSON files         |                    | MQTT Mosquitto broker             |
-|   -> Python sensor-replay ---+-- MQTT/TLS ------->|      |                            |
-| Streamlit dashboard <--------+-- HTTPS/API -------+------ FastAPI <--- PostgreSQL     |
-+------------------------------+                    |      ^                 ^          |
-                                                   | Signal processor -> Road analyzer|
-                                                   |      (via MQTT topics)           |
-                                                   +-----------------------------------+
-```
+Data flow: **MUHOS CSV → VPS Sensor Replay → MQTT/TLS → Rahti Broker → Signal Processor → MQTT features → Road Analyzer → PostgreSQL → FastAPI → HTTPS → VPS Dashboard**.
 
-**Note:** The chart above is a conceptual diagram. See [detailed architecture](docs/01-architecture.md) and the [Mermaid diagram](architecture/road-sense.mmd) for data flow and trust boundaries.
+[View editable architecture diagram](architecture/road-sense.mmd) · [Architecture explanation](docs/architecture.md)
 
-## Project boundaries
+## Documentation
 
-- **Required MVP:** one Bosch IMU recording, deterministic sensor replay, MQTT, window-based vibration features, simple alerts, persisted results, FastAPI, and Streamlit visualization.
-- **Planned second data source:** CAN speed, **only after** its timestamps and units are verified from real downloaded files.
-- **Out of scope:** real-time hardware, clinical/medical inference, automatic pothole identification, ROS2, raw video, LiDAR, machine learning, production fleet tracking.
-- **No fabricated claims:** the “roughness” metric is an exploratory vibration indicator, **not** a validated road-surface quality measurement. Speed and sensor orientation can affect results.
-- **No implementation now:** directory READMEs are placeholders for later Codex phases.
+- [Codex operating instructions](AGENTS.md)
+- [System architecture and network boundaries](docs/architecture.md)
+- [Data contracts, MQTT topics, database, and API](docs/contracts.md)
+- [VPS/Rahti deployment and security operations](docs/operations.md)
+- [Acceptance tests, final demo and course submission](docs/acceptance-and-submission.md)
+- [Known risks and open questions](docs/decisions-risks.md)
+- [Repository layout and ownership](docs/repository-map.md)
 
-## Start here
+## Eight phases — implement strictly in order
 
-1. [Project charter and boundaries](docs/00-project-charter.md)
-2. [Architecture](docs/01-architecture.md)
-3. [Data formats and message contracts](docs/02-data-contracts.md)
-4. [VPS + Rahti deployment plan](docs/03-vps-rahti-deployment.md)
-5. [Security and operations](docs/04-security-operations.md)
-6. [Acceptance tests and video walkthrough](docs/05-validation-demo.md)
-7. [Course submission and evidence](docs/06-course-submission.md)
-8. [Open decisions, assumptions, risks](docs/07-decisions-and-risks.md)
-9. [Repository layout and implementation ownership](docs/08-repository-structure.md)
-10. [Codex handoff rules](AGENTS.md)
-
-## Ordered phases
-
-| Phase | Goal | Instructions |
+| Phase | Objective | Phase instructions |
 |---|---|---|
-| 00 | Verify requirements and inspect MUHOS data | [Phase 00](phases/00-scope-and-data.md) |
-| 01 | Prepare and secure the VPS | [Phase 01](phases/01-vps-foundation.md) |
-| 02 | Build and prove replay through local MQTT | [Phase 02](phases/02-replay-and-mqtt.md) |
-| 03 | Compute vibration features from streaming IMU | [Phase 03](phases/03-signal-processing.md) |
-| 04 | Generate events and persist features | [Phase 04](phases/04-analysis-and-database.md) |
-| 05 | Serve and visualize stored measurements | [Phase 05](phases/05-api-and-dashboard.md) |
-| 06 | Move backend to Rahti and connect VPS | [Phase 06](phases/06-rahti-integration.md) |
-| 07 | Validate, harden, document and demonstrate | [Phase 07](phases/07-final-validation.md) |
+| 00 | Verify MUHOS files and course rules | [Open](phases/00-scope-data.md) |
+| 01 | Prepare and secure the VPS | [Open](phases/01-vps-foundation.md) |
+| 02 | Replay IMU CSV using Python/Docker/MQTT | [Open](phases/02-replay-mqtt.md) |
+| 03 | Compute vibration features from MQTT streams | [Open](phases/03-signal-processing.md) |
+| 04 | Add rules and persistent PostgreSQL storage | [Open](phases/04-analyzer-storage.md) |
+| 05 | Build FastAPI and the Streamlit dashboard | [Open](phases/05-api-dashboard.md) |
+| 06 | Move backend services to Rahti; link VPS | [Open](phases/06-rahti-integration.md) |
+| 07 | Verify, demonstrate, document and submit | [Open](phases/07-final-submission.md) |
 
-**Execution rule:** Codex implements **one phase at a time** and does not start the next until the current phase has met all acceptance criteria. All phases are presently unimplemented.
+Each phase document contains a **goal, prerequisites, tasks for Codex, deliverables, acceptance criteria, and a copyable Codex request**. Codex should implement one phase per branch and stop before starting the next.
 
-## Intended services
+## Planned structure
 
-| Service | Runs on | Stack |
-|---|---|---|
-| `sensor-replay` | VPS | Python, Pandas, Paho-MQTT, Docker |
-| `dashboard` | VPS | Streamlit, Plotly, Docker |
-| `mqtt-broker` | Rahti (local copy for development) | Eclipse Mosquitto |
-| `signal-processor` | Rahti | Python, NumPy/SciPy, Docker |
-| `road-analyzer` | Rahti | Python, rules, PostgreSQL client |
-| `api` | Rahti | FastAPI, PostgreSQL client |
-| `postgres` | Rahti | PostgreSQL, persistent volume |
+- `services/sensor-replay` — VPS Python/Pandas MQTT feeder
+- `services/signal-processor` — Rahti Python/NumPy/SciPy feature calculation
+- `services/road-analyzer` — Rahti Python rules and PostgreSQL writing
+- `services/api` — Rahti FastAPI REST
+- `services/dashboard` — VPS Streamlit/Plotly
+- `infrastructure/vps` — VPS guides
+- `infrastructure/compose` — local/VPS Docker Compose
+- `infrastructure/rahti` — Kubernetes/OpenShift manifests
+- `data` — acquisition docs, **not recordings**
+- `tests` — future validation
 
-Initial prototypes run **on the VPS using Docker Compose**, with the backend migrated to Rahti only in Phase 06.
+## Scope and key decisions
 
-## External references
+MVP: replay one verified Bosch IMU CSV recording; compute time-window vibration RMS/peak; report high-vibration events; store and visualize results; demonstrate VPS-to-Rahti communication. Optional later: CAN speed after checking dataset units and timing. **No ML, ROS2, LiDAR, raw camera analysis, or real vehicle integration.**
 
-- [MUHOS dataset and downloads](https://m3s-kuura.github.io/muhos-dataset/)
-- [Course homework and final project repository](https://gitlab.com/sdx-oulu/2024/hw-and-project)
-- [Final Project instructions](https://gitlab.com/sdx-oulu/2024/hw-and-project/-/blob/main/Final-Project/README.md)
+**Course compliance question:** verify that a VPS counts for any assignment wording requiring a 'local Docker' component. If not, also demonstrate a laptop Compose client. The [official course repo](https://gitlab.com/sdx-oulu/2024/hw-and-project) may require submission in its GitLab `Final-Project/` path rather than this GitHub repository. Check [submission instructions](https://gitlab.com/sdx-oulu/2024/hw-and-project/-/blob/main/Final-Project/README.md) at Phase 00.
 
-**Course requirement check:** confirm with the teacher whether an internet VPS outside Rahti satisfies any stated “local Docker” requirement; a VPS is an external node, but it is not physically local.
+Data source: [MUHOS documentation](https://m3s-kuura.github.io/muhos-dataset/). License, citation, schema, timestamps and units must be verified from actual downloaded files before implementation. Never commit raw archives or credentials.
 
-**Dataset check:** obtain dataset files, verify the dataset's attribution/license terms from the source, and do not commit raw recordings or personal information to GitHub.
-
-## Submission
-
-This GitHub repository is the **working project repository**. The course may require specific files in a separate GitLab fork under `Final-Project/`. Consult [submission plan](docs/06-course-submission.md) for the required final copy/sync, diagram, open-source reference, and demonstration link.
+**Next action:** give Codex the [Phase 00 specification](phases/00-scope-data.md), but only when ready to begin implementation.
