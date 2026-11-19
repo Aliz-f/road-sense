@@ -95,14 +95,21 @@ Optional cache rollback, only if the image is not used elsewhere:
 docker image rm docker.io/library/busybox:1.36.1
 ```
 
-Future local startup/teardown commands, once Phase 02 creates the application
-Compose file, will follow this shape:
+Phase 02 is expected to create the application file at
+`infrastructure/compose/local.compose.yaml`. Until that file exists, the
+following commands are illustrative and must not be run. Once it exists, use
+the explicit environment and Compose paths consistently for every lifecycle
+operation:
 
 ```sh
-docker compose --env-file config/environments/local/.env up --build --wait
-docker compose ps
-docker compose logs --tail=100
-docker compose down --remove-orphans
+docker compose --env-file config/environments/local/.env \
+  -f infrastructure/compose/local.compose.yaml up --build --wait
+docker compose --env-file config/environments/local/.env \
+  -f infrastructure/compose/local.compose.yaml ps
+docker compose --env-file config/environments/local/.env \
+  -f infrastructure/compose/local.compose.yaml logs --tail=100
+docker compose --env-file config/environments/local/.env \
+  -f infrastructure/compose/local.compose.yaml down --remove-orphans
 ```
 
 Do not add `--volumes` to routine teardown after PostgreSQL persistence exists;

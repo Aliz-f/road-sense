@@ -11,6 +11,15 @@ cleanup() {
 }
 trap cleanup EXIT HUP INT TERM
 
+network_has_container() {
+  network_name=$1
+  candidate_container_id=$2
+  network_container_ids=$(docker network inspect \
+    --format '{{range $id, $_ := .Containers}}{{println $id}}{{end}}' \
+    "$network_name" 2>/dev/null) || return 1
+  printf '%s\n' "$network_container_ids" | grep -Fqx "$candidate_container_id"
+}
+
 printf '%s\n' 'Phase 01 local validation'
 docker --version
 docker compose version
@@ -42,6 +51,12 @@ test -n "$container_id"
 test "$(docker inspect --format '{{.State.Health.Status}}' "$container_id")" = healthy
 test -z "$(docker port "$container_id")"
 test "$(docker inspect --format '{{.HostConfig.ReadonlyRootfs}}' "$container_id")" = true
-test "$(docker inspect --format '{{index .NetworkSettings.Networks "roadsense-phase01-preflight_preflight" | printf "%t" .}}' "$container_id")" != '<nil>'
+expected_network=roadsense-phase01-preflight_preflight
+network_has_container "$expected_network" "$container_id"
+if network_has_container "${expected_network}-absent" "$container_id"; then
+  printf '%s\n' 'network membership assertion accepted an absent network' >&2
+  exit 1
+fi
+printf '%s\n' 'network membership negative control: PASS'
 
 printf '%s\n' 'Phase 01 local validation: PASS'

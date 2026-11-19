@@ -15,6 +15,9 @@
 - Added a reproducible validation script and local setup/troubleshooting guide.
 - Updated Compose and operations documentation. No application microservice,
   VPS connection, Rahti resource, firewall, DNS, SSH, or package was changed.
+- Review correction: network membership now checks the expected Docker
+  network's container-ID map directly and runs an absent-network negative
+  control. Future application lifecycle examples use an explicit Compose path.
 
 ## Sanitized validation log
 
@@ -24,14 +27,18 @@ Docker Compose version v5.6.1
 context=desktop-linux
 server=29.9.2 desktop=Docker Desktop 4.98.0 (245422)
 Container roadsense-phase01-preflight-engine-check-1 Healthy
+network membership negative control: PASS
 Phase 01 local validation: PASS
+preflight cleanup: PASS
 ```
 
 The script verified the ignored/readable dataset path, absence of tracked raw
 data, valid Compose rendering, exact pinned image reference, healthy container,
 read-only root filesystem, internal network membership, and no published ports.
-Its trap removed the dedicated preflight container and network. Existing
-containers were not stopped or modified.
+The absent-network negative control proved that the membership assertion fails
+when the expected network cannot be inspected. The cleanup trap removed the
+dedicated preflight container and network; post-run checks found neither
+resource. Existing containers were not stopped or modified.
 
 ## Remaining risks and decisions
 
