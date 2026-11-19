@@ -1,7 +1,7 @@
 # Tests
 
-**Status: Phase 02 replay/MQTT and Phase 03 signal-processing tests are
-implemented. Persistence, API, and UI tests do not yet exist.**
+**Status: Phase 02 replay/MQTT, Phase 03 signal-processing, and Phase 04
+analyzer/PostgreSQL tests are implemented. API and UI tests do not yet exist.**
 
 `phase02_e2e.sh` builds the Sensor Replay image, runs its unit suite, verifies
 broker authentication, uses a separate schema-validating subscriber, and
@@ -27,3 +27,16 @@ PHASE03_FULL_REPLAY=true ./tests/phase03_e2e.sh
 ```
 
 See `../docs/phase-03-report.md` for actual output and limitations.
+
+`phase04_e2e.sh` runs the analyzer unit suite, interrupts and restores MQTT,
+replays 1,536 actual Bumpy-gravel samples, independently checks all 19 stored
+features and five threshold events, injects exact and conflicting duplicate
+feature deliveries, and proves the named PostgreSQL volume survives container
+recreation. Routine cleanup intentionally does not delete that volume.
+
+```sh
+./tests/phase04_e2e.sh
+```
+
+See `../docs/phase-04-report.md` for the threshold rationale, actual output,
+and rollback procedure.

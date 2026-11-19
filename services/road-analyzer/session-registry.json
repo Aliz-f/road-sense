@@ -1,0 +1,35 @@
+[
+  {
+    "session_id": "bumpy-gravel-20261019",
+    "sensor_id": "bosch-xdk-110",
+    "source_archive_sha256": "91d37ad4de7106d5038ed7bffe1e373db65e0f4771865da8975a216e76ed34f3",
+    "source_member": "imu/bosch_imu.csv",
+    "source_start": "2026-10-19T05:51:57.052Z",
+    "source_end": "2026-10-19T06:04:23.585Z",
+    "row_count": 62169,
+    "road_category": "Bumpy gravel",
+    "orientation_note": "Sensor orientation relative to the vehicle is unknown."
+  },
+  {
+    "session_id": "paved-road-60kmh-20261007",
+    "sensor_id": "bosch-xdk-110",
+    "source_archive_sha256": "cf3d0002573f1ecaa021034a3a20dee6cbb21a47989026d8b4ed0c8a81b7c6a4",
+    "source_member": "imu/bosch_imu.csv",
+    "source_start": "2026-10-07T09:52:42.239Z",
+    "source_end": "2026-10-07T10:02:22.696Z",
+    "row_count": 48363,
+    "road_category": "Paved road 60kmh recording label",
+    "orientation_note": "Sensor orientation relative to the vehicle is unknown."
+  },
+  {
+    "session_id": "highway-20261007",
+    "sensor_id": "bosch-xdk-110",
+    "source_archive_sha256": "d80eb161b896819851ed2d3aeea38da977c98a836096b31d9f6a5e8af193c903",
+    "source_member": "imu/bosch.csv",
+    "source_start": "2026-10-07T10:19:32.241Z",
+    "source_end": "2026-10-07T10:26:22.648Z",
+    "row_count": 34195,
+    "road_category": "Highway recording label",
+    "orientation_note": "Sensor orientation relative to the vehicle is unknown."
+  }
+]

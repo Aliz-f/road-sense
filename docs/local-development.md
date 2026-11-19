@@ -95,10 +95,12 @@ docker image rm docker.io/library/busybox:1.36.1
 ```
 
 Phase 02 created `infrastructure/compose/local.compose.yaml`; Phase 03 added
-Signal Processor and the `roadsense/v1/imu/run-complete` control path. The
+Signal Processor and the `roadsense/v1/imu/run-complete` control path. Phase 04
+added Road Analyzer, migrations, and PostgreSQL on the named
+`roadsense-local-postgres-data` volume. The
 local broker limits a subscriber to one unacknowledged QoS message; the
-processor manually acknowledges after processing so its bounded queue applies
-backpressure without blocking the Paho callback. Generate the ignored local
+processor and analyzer manually acknowledge only after processing so bounded
+queues apply backpressure without blocking Paho callbacks. Generate the ignored local
 credentials/certificates, then use the explicit environment and Compose paths
 consistently:
 
@@ -106,7 +108,7 @@ consistently:
 ./tools/prepare_phase02_local.sh
 docker compose --env-file config/environments/local/.env.phase02 \
   -f infrastructure/compose/local.compose.yaml up --build -d --wait \
-  mqtt-broker signal-processor
+  mqtt-broker postgres signal-processor road-analyzer
 docker compose --env-file config/environments/local/.env.phase02 \
   -f infrastructure/compose/local.compose.yaml run --rm sensor-replay
 docker compose --env-file config/environments/local/.env.phase02 \
@@ -117,8 +119,10 @@ docker compose --env-file config/environments/local/.env.phase02 \
   -f infrastructure/compose/local.compose.yaml down --remove-orphans
 ```
 
-Do not add `--volumes` to routine teardown after PostgreSQL persistence exists;
-that would remove local database data.
+The one-shot `analyzer-migrate` service runs automatically before the analyzer.
+Use `./tests/phase04_e2e.sh` for the real-data, reconnect, duplicate, and
+persistence checks. Do not add `--volumes` to routine teardown; that would
+delete local database data.
 
 ## Troubleshooting and risk checklist
 

@@ -50,6 +50,31 @@ x-processor-environment: &processor-environment
   security_opt:
     - no-new-privileges:true
 
+x-analyzer-image: &analyzer-image
+  image: roadsense/road-analyzer:phase04-local
+  build:
+    context: ../..
+    dockerfile: services/road-analyzer/Dockerfile
+    target: runtime
+
+x-analyzer-environment: &analyzer-environment
+  env_file:
+    - ../../config/environments/local/.env.phase02
+  volumes:
+    - type: bind
+      source: ${MQTT_RUNTIME_DIR:?run tools/prepare_phase02_local.sh}/ca.crt
+      target: /run/roadsense/mqtt/ca.crt
+      read_only: true
+  networks:
+    - roadsense
+  read_only: true
+  tmpfs:
+    - /tmp:rw,noexec,nosuid,size=8m
+  cap_drop:
+    - ALL
+  security_opt:
+    - no-new-privileges:true
+
 services:
   mqtt-auth-init:
     image: eclipse-mosquitto:2.0.22@sha256:81a6193ae693942a3231cd3ac52875b02b7e3a19da671b2fb4b55cc874c5b279
@@ -60,7 +85,7 @@ services:
     command:
       - |
         mosquitto_passwd -b -c /run/roadsense/mqtt/password_file "$$MQTT_USERNAME" "$$MQTT_PASSWORD"
-        printf 'user %s\ntopic readwrite roadsense/v1/imu/raw\ntopic readwrite roadsense/v1/imu/run-complete\ntopic readwrite roadsense/v1/imu/features\ntopic read $$SYS/#\n' "$$MQTT_USERNAME" > /run/roadsense/mqtt/acl_file
+        printf 'user %s\ntopic readwrite roadsense/v1/imu/raw\ntopic readwrite roadsense/v1/imu/run-complete\ntopic readwrite roadsense/v1/imu/features\ntopic readwrite roadsense/v1/events\ntopic read $$SYS/#\n' "$$MQTT_USERNAME" > /run/roadsense/mqtt/acl_file
         chmod 600 /run/roadsense/mqtt/password_file /run/roadsense/mqtt/acl_file
     volumes:
       - type: bind
@@ -138,6 +163,60 @@ services:
     stop_grace_period: 15s
     restart: unless-stopped
 
+  postgres:
+    image: postgres:16.6-bookworm@sha256:557fea37a744d5f4c8faab304b0a90858b53ab119735a88c131fd19dab802f36
+    env_file:
+      - ../../config/environments/local/.env.phase02
+    environment:
+      POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256
+    volumes:
+      - type: volume
+        source: postgres-data
+        target: /var/lib/postgresql/data
+    networks:
+      - roadsense
+    tmpfs:
+      - /var/run/postgresql:rw,nosuid,size=8m
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 2s
+      timeout: 4s
+      retries: 30
+      start_period: 5s
+    restart: unless-stopped
+
+  analyzer-migrate:
+    <<: [*analyzer-image, *analyzer-environment]
+    entrypoint: ["python", "-m", "road_analyzer.migrate"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  road-analyzer:
+    <<: [*analyzer-image, *analyzer-environment]
+    environment:
+      ANALYZER_QUEUE_CAPACITY: ${ANALYZER_QUEUE_CAPACITY:-1024}
+      ANALYZER_VIBRATION_RMS_THRESHOLD_MG: ${ANALYZER_VIBRATION_RMS_THRESHOLD_MG:-100.0}
+      ANALYZER_RULE_VERSION: ${ANALYZER_RULE_VERSION:-roadsense-high-vibration-rms-v1-t100}
+    depends_on:
+      mqtt-broker:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      analyzer-migrate:
+        condition: service_completed_successfully
+    stop_grace_period: 15s
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-m", "road_analyzer.health"]
+      interval: 3s
+      timeout: 4s
+      retries: 20
+      start_period: 3s
+
   mqtt-subscriber:
     <<: [*sensor-image, *sensor-environment]
     entrypoint: ["python", "-m", "sensor_replay.subscriber"]
@@ -147,6 +226,12 @@ services:
   feature-subscriber:
     <<: [*processor-image, *processor-environment]
     entrypoint: ["python", "-m", "signal_processor.feature_subscriber"]
+    profiles: ["test"]
+    restart: "no"
+
+  event-subscriber:
+    <<: [*analyzer-image, *analyzer-environment]
+    entrypoint: ["python", "-m", "road_analyzer.event_subscriber"]
     profiles: ["test"]
     restart: "no"
 
@@ -182,6 +267,54 @@ services:
     security_opt:
       - no-new-privileges:true
 
+  analyzer-unit-tests:
+    image: roadsense/road-analyzer-test:phase04-local
+    build:
+      context: ../..
+      dockerfile: services/road-analyzer/Dockerfile
+      target: test
+    profiles: ["test"]
+    network_mode: none
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+  analyzer-integration-helper:
+    image: roadsense/road-analyzer-test:phase04-local
+    build:
+      context: ../..
+      dockerfile: services/road-analyzer/Dockerfile
+      target: test
+    env_file:
+      - ../../config/environments/local/.env.phase02
+    volumes:
+      - type: bind
+        source: ${ROADSENSE_DATASET_ROOT:?set the private dataset path}
+        target: /data/archives
+        read_only: true
+      - type: bind
+        source: ${MQTT_RUNTIME_DIR}/ca.crt
+        target: /run/roadsense/mqtt/ca.crt
+        read_only: true
+    networks:
+      - roadsense
+    profiles: ["test"]
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
 networks:
   roadsense:
     internal: true
+
+volumes:
+  postgres-data:
+    name: roadsense-local-postgres-data

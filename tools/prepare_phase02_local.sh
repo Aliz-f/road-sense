@@ -82,8 +82,21 @@ if test "$force" = true || ! test -s "$phase02_env"; then
     printf 'MQTT_RAW_TOPIC=roadsense/v1/imu/raw\n'
     printf 'MQTT_RUN_COMPLETE_TOPIC=roadsense/v1/imu/run-complete\n'
     printf 'MQTT_FEATURE_TOPIC=roadsense/v1/imu/features\n'
+    printf 'MQTT_EVENT_TOPIC=roadsense/v1/events\n'
     printf 'PROCESSOR_MQTT_CLIENT_ID=roadsense-signal-processor-local\n'
     printf 'PROCESSOR_QUEUE_CAPACITY=1024\n'
+    printf 'ANALYZER_MQTT_CLIENT_ID=roadsense-road-analyzer-local\n'
+    printf 'ANALYZER_QUEUE_CAPACITY=1024\n'
+    printf 'ANALYZER_VIBRATION_RMS_THRESHOLD_MG=100.0\n'
+    printf 'ANALYZER_RULE_VERSION=roadsense-high-vibration-rms-v1-t100\n'
+    printf 'ANALYZER_SESSION_REGISTRY_FILE=/app/session-registry.json\n'
+    printf 'POSTGRES_HOST=postgres\n'
+    printf 'POSTGRES_PORT=5432\n'
+    printf 'POSTGRES_DB=roadsense\n'
+    printf 'POSTGRES_USER=roadsense\n'
+    printf 'POSTGRES_PASSWORD=%s\n' "$(openssl rand -hex 24)"
+    printf 'POSTGRES_CONNECT_TIMEOUT_SECONDS=5\n'
+    printf 'POSTGRES_CONNECT_RETRIES=30\n'
     printf 'MQTT_CONNECT_RETRIES=10\n'
     printf 'MQTT_CONNECT_TIMEOUT_SECONDS=10\n'
     printf 'MQTT_PUBLISH_TIMEOUT_SECONDS=10\n'
@@ -94,6 +107,34 @@ if test "$force" = true || ! test -s "$phase02_env"; then
   } > "$phase02_env"
   chmod 600 "$phase02_env"
 fi
+
+ensure_setting() {
+  setting_name=$1
+  setting_value=$2
+  if ! grep -q "^${setting_name}=" "$phase02_env"; then
+    printf '%s=%s\n' "$setting_name" "$setting_value" >> "$phase02_env"
+  fi
+}
+
+ensure_setting MQTT_EVENT_TOPIC roadsense/v1/events
+ensure_setting ANALYZER_MQTT_CLIENT_ID roadsense-road-analyzer-local
+ensure_setting ANALYZER_QUEUE_CAPACITY 1024
+ensure_setting ANALYZER_VIBRATION_RMS_THRESHOLD_MG 100.0
+ensure_setting ANALYZER_RULE_VERSION roadsense-high-vibration-rms-v1-t100
+ensure_setting ANALYZER_SESSION_REGISTRY_FILE /app/session-registry.json
+ensure_setting POSTGRES_HOST postgres
+ensure_setting POSTGRES_PORT 5432
+ensure_setting POSTGRES_DB roadsense
+ensure_setting POSTGRES_USER roadsense
+if grep -q '^POSTGRES_PASSWORD=$' "$phase02_env"; then
+  postgres_password=$(openssl rand -hex 24)
+  sed -i "s/^POSTGRES_PASSWORD=$/POSTGRES_PASSWORD=$postgres_password/" "$phase02_env"
+elif ! grep -q '^POSTGRES_PASSWORD=' "$phase02_env"; then
+  ensure_setting POSTGRES_PASSWORD "$(openssl rand -hex 24)"
+fi
+ensure_setting POSTGRES_CONNECT_TIMEOUT_SECONDS 5
+ensure_setting POSTGRES_CONNECT_RETRIES 30
+chmod 600 "$phase02_env"
 
 openssl verify -CAfile "$runtime_dir/ca.crt" "$runtime_dir/server.crt" >/dev/null
 printf '%s\n' 'Phase 02 local credentials and TLS material: ready (ignored by Git)'

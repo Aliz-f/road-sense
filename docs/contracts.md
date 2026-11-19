@@ -113,14 +113,46 @@ fatal, non-acknowledged error rather than a blocking callback or silent drop.
 
 Supplied records contain numeric epoch timestamps and decoded message=SPEED, signal=SPEED values, but no unit. The CAN topic remains disabled. Before enabling it, record an authoritative unit source, conversion, clock/timezone interpretation, and alignment tolerance here. A future payload must include explicit speed_unit; unknown or invalid units are rejected.
 
-## Database (proposed)
+## High-vibration event payload v1
 
-- sessions: immutable provenance including archive hash/member, source bounds, row count, sensor ID, road-category label, and orientation note.
-- runs: unique run_id, session, replay rate, start/end/status, and algorithm version.
-- feature_windows: unique feature idempotency key, source interval, sample count, metrics, baseline method/value, and quality flags.
-- events: run/window reference, heuristic type, rule version, and severity.
+The Road Analyzer publishes an event only when the configured inclusive rule
+`vibration_rms_mg >= threshold_vibration_rms_mg` matches. The Phase 04 default
+is `100.0 mg`, identified by rule version
+`roadsense-high-vibration-rms-v1-t100`. Changing the threshold or semantics
+requires a new rule version.
 
-MQTT QoS 1 duplicates use idempotent inserts/upserts. A duplicate key with different content must fail rather than overwrite provenance.
+Required fields are `schema_version=1`, deterministic UUID `event_id`,
+`event_type=high_vibration`, the feature's run/session/sensor/archive/member,
+window index and source bounds, `algorithm_version`,
+`heuristic_type=vibration_rms_threshold`, `rule_version`, `severity=high`,
+`threshold_vibration_rms_mg`, `observed_vibration_rms_mg`, and the source
+feature's ordered `quality_flags`. The event idempotency key is
+`(run_id, window_index, algorithm_version, rule_version)`. Event delivery is
+at least once; consumers use `event_id` to collapse exact MQTT duplicates.
+These are exploratory vehicle-vibration events, not validated potholes, road
+defects, or safety classifications.
+
+## Database (implemented in Phase 04)
+
+- `sessions`: immutable registry provenance including archive hash/member,
+  full source bounds, row count, sensor ID, road-category label, and unknown
+  orientation note. `(source_archive_sha256, source_member)` is unique.
+- `runs`: unique `run_id`, session/sensor, observed feature bounds, status, and
+  algorithm version. Replay rate remains nullable because feature v1 does not
+  carry it. Status is `observed`; the analyzer receives no completion topic and
+  therefore does not infer completion.
+- `feature_windows`: unique `(run_id, window_index, algorithm_version)`, source
+  interval, sample count, metrics, baseline method/value, quality flags, and a
+  canonical payload SHA-256.
+- `events`: deterministic event UUID plus unique
+  `(run_id, window_index, algorithm_version, rule_version)`, feature reference,
+  heuristic/rule, severity, threshold/observed values, and payload SHA-256.
+- `schema_migrations`: applied file name, immutable checksum, and timestamp.
+
+Feature/event persistence is one database transaction. Exact QoS 1 feature
+duplicates reuse existing rows. A duplicate key with different canonical
+content or provenance is rejected rather than overwritten. The named local
+PostgreSQL volume persists across container recreation and has no host port.
 
 ## API (proposed)
 
