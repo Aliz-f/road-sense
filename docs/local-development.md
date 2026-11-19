@@ -60,7 +60,7 @@ private application network. Containers communicate using these service names:
 | `sensor-replay` | process/readiness state | none |
 | `signal-processor` | authenticated raw/completion subscriptions and structured ready event | none |
 | `road-analyzer` | DB and MQTT readiness | none |
-| `postgres` | `pg_isready` | none by default; if needed, `127.0.0.1:5432` only |
+| `postgres` | authenticated `SELECT 1` | none |
 | `api` | HTTP `/health/ready` | `127.0.0.1:8000` |
 | `dashboard` | HTTP health endpoint | `127.0.0.1:8501` |
 
@@ -95,10 +95,13 @@ docker image rm docker.io/library/busybox:1.36.1
 ```
 
 Phase 02 created `infrastructure/compose/local.compose.yaml`; Phase 03 added
-Signal Processor and the `roadsense/v1/imu/run-complete` control path. The
+Signal Processor and the `roadsense/v1/imu/run-complete` control path. Phase 04
+added Road Analyzer, migrations, and PostgreSQL on the named
+`roadsense-local-postgres-data` volume, plus broker/session persistence on
+`roadsense-local-mqtt-data`. The
 local broker limits a subscriber to one unacknowledged QoS message; the
-processor manually acknowledges after processing so its bounded queue applies
-backpressure without blocking the Paho callback. Generate the ignored local
+processor and analyzer manually acknowledge only after processing so bounded
+queues apply backpressure without blocking Paho callbacks. Generate the ignored local
 credentials/certificates, then use the explicit environment and Compose paths
 consistently:
 
@@ -106,7 +109,7 @@ consistently:
 ./tools/prepare_phase02_local.sh
 docker compose --env-file config/environments/local/.env.phase02 \
   -f infrastructure/compose/local.compose.yaml up --build -d --wait \
-  mqtt-broker signal-processor
+  mqtt-broker postgres signal-processor road-analyzer
 docker compose --env-file config/environments/local/.env.phase02 \
   -f infrastructure/compose/local.compose.yaml run --rm sensor-replay
 docker compose --env-file config/environments/local/.env.phase02 \
@@ -117,8 +120,23 @@ docker compose --env-file config/environments/local/.env.phase02 \
   -f infrastructure/compose/local.compose.yaml down --remove-orphans
 ```
 
-Do not add `--volumes` to routine teardown after PostgreSQL persistence exists;
-that would remove local database data.
+The one-shot `analyzer-migrate` service runs automatically before the analyzer.
+Use `./tests/phase04_e2e.sh` for the real-data, database/broker/process outage,
+outbox, rotation, duplicate, and repeated-volume checks. Do not add `--volumes`
+to routine teardown; that would delete local database and queued MQTT data.
+
+The database password lives in the ignored
+`config/environments/local/runtime/postgres/password` file. Preparation creates
+it only for a new environment and preserves it under `--force`. Rotate it
+explicitly, while PostgreSQL is available, with:
+
+```sh
+./tools/rotate_phase04_postgres_password.sh --apply
+```
+
+No password value is printed. If rotation is interrupted, retain the ignored
+`password.previous` fallback and rerun the command; analyzer reconnects accept
+either staged credential.
 
 ## Troubleshooting and risk checklist
 

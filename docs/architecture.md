@@ -26,14 +26,24 @@ LAPTOP: MUHOS CSV → feeder → MQTT broker → processor → MQTT broker → a
 ```
 In local Compose all containers communicate over a private Docker network using Docker service names. Dashboard uses local FastAPI address. All services are fully tested locally.
 
-Through Phase 03, the implemented local path is Sensor Replay → authenticated
-TLS Mosquitto → Signal Processor → MQTT feature topic. Sensor Replay also
+Through Phase 04, the implemented local path is Sensor Replay → authenticated
+TLS Mosquitto → Signal Processor → MQTT feature topic → Road Analyzer →
+PostgreSQL. Threshold events are published back to the MQTT event topic. Sensor Replay also
 sends a provenance-bound run-completion control message so the processor can
 publish the final source-time window without stopping. The broker's one-message
-QoS inflight limit and the processor's manual acknowledgements provide bounded
-backpressure without blocking Paho's network callback. The processor has no
-host port, uses a read-only container filesystem, and derives windows only from
-source timestamps. Analyzer, storage, API, and dashboard remain future phases.
+QoS inflight limit and both subscribers' manual acknowledgements provide bounded
+backpressure without blocking Paho network callbacks. The processor and analyzer
+have no host ports and use read-only container filesystems. PostgreSQL is
+internal-only and uses the named `roadsense-local-postgres-data` volume. API and
+dashboard remain future phases.
+
+The analyzer commits each event and its MQTT outbox payload atomically, then
+publishes pending rows with QoS 1 and records completion. This closes the
+database-commit/publication loss window while retaining deterministic
+at-least-once event IDs. Rule versions are bound to exact heuristic semantics
+and thresholds. Mosquitto stores the durable analyzer session and queued QoS 1
+features in `roadsense-local-mqtt-data`, so broker and analyzer restarts do not
+discard queued Phase 04 work.
 
 ## Final deployed communication
 ```text

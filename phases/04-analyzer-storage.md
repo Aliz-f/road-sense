@@ -1,6 +1,7 @@
 # Phase 04 — Road analyzer and database
 
-**Status:** Not started. Documentation only.
+**Status:** Complete locally on branch `phase/04-analyzer-storage`; see
+`../docs/phase-04-report.md`. Phase 05 remains out of scope.
 
 ## Goal
 Convert feature streams into simple explained events and durable records **on the laptop's Docker Compose environment**.
@@ -20,10 +21,10 @@ Phase 03 features, DB schema, initial documented heuristic threshold.
 Analyzer and DB modules, migrations, Compose additions, threshold rationale, recovery tests.
 
 ## Acceptance / exit gate
-- [ ] Queryable persisted features/events
-- [ ] duplicate delivery creates no extra rows
-- [ ] state persists after restart
-- [ ] no publicly accessible DB.
+- [x] Queryable persisted features/events
+- [x] duplicate delivery creates no extra rows
+- [x] state persists after restart
+- [x] no publicly accessible DB.
 
 ## Required phase report
 Codex must record actual commands (without secrets), files created, test commands and results, observed output screenshots/logs, assumptions, unresolved risks and the rollback procedure when relevant. Do not mark complete on unverified claims.

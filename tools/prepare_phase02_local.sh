@@ -5,6 +5,8 @@ repository_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 phase01_env="$repository_root/config/environments/local/.env"
 phase02_env="$repository_root/config/environments/local/.env.phase02"
 runtime_dir="$repository_root/config/environments/local/runtime/mqtt"
+postgres_runtime_dir="$repository_root/config/environments/local/runtime/postgres"
+postgres_password_file="$postgres_runtime_dir/password"
 
 force=false
 if test "${1:-}" = --force; then
@@ -24,7 +26,27 @@ test -r "$dataset_root/Bumpy Gravel - imu.tar"
 command -v openssl >/dev/null
 
 umask 077
-mkdir -p "$runtime_dir"
+mkdir -p "$runtime_dir" "$postgres_runtime_dir"
+chmod 750 "$postgres_runtime_dir"
+
+# Migrate the legacy inline credential once. Thereafter this file is the
+# stable source of truth and --force never changes it.
+if ! test -s "$postgres_password_file"; then
+  legacy_postgres_password=
+  if test -s "$phase02_env"; then
+    legacy_postgres_password=$(sed -n 's/^POSTGRES_PASSWORD=//p' "$phase02_env")
+  fi
+  if test -n "$legacy_postgres_password"; then
+    printf '%s\n' "$legacy_postgres_password" > "$postgres_password_file"
+  elif ! test -s "$phase02_env"; then
+    openssl rand -hex 32 > "$postgres_password_file"
+  else
+    printf '%s\n' 'existing environment has no recoverable PostgreSQL password; refusing to regenerate it' >&2
+    exit 1
+  fi
+  chmod 640 "$postgres_password_file"
+fi
+chmod 640 "$postgres_password_file"
 
 certificate_valid=false
 if test -s "$runtime_dir/ca.crt" && test -s "$runtime_dir/server.crt" && \
@@ -82,8 +104,22 @@ if test "$force" = true || ! test -s "$phase02_env"; then
     printf 'MQTT_RAW_TOPIC=roadsense/v1/imu/raw\n'
     printf 'MQTT_RUN_COMPLETE_TOPIC=roadsense/v1/imu/run-complete\n'
     printf 'MQTT_FEATURE_TOPIC=roadsense/v1/imu/features\n'
+    printf 'MQTT_EVENT_TOPIC=roadsense/v1/events\n'
     printf 'PROCESSOR_MQTT_CLIENT_ID=roadsense-signal-processor-local\n'
     printf 'PROCESSOR_QUEUE_CAPACITY=1024\n'
+    printf 'ANALYZER_MQTT_CLIENT_ID=roadsense-road-analyzer-local\n'
+    printf 'ANALYZER_QUEUE_CAPACITY=1024\n'
+    printf 'ANALYZER_VIBRATION_RMS_THRESHOLD_MG=100.0\n'
+    printf 'ANALYZER_RULE_VERSION=roadsense-high-vibration-rms-v1-t100\n'
+    printf 'ANALYZER_SESSION_REGISTRY_FILE=/app/session-registry.json\n'
+    printf 'POSTGRES_HOST=postgres\n'
+    printf 'POSTGRES_PORT=5432\n'
+    printf 'POSTGRES_DB=roadsense\n'
+    printf 'POSTGRES_USER=roadsense\n'
+    printf 'POSTGRES_PASSWORD_FILE=/run/roadsense/postgres/password\n'
+    printf 'POSTGRES_PREVIOUS_PASSWORD_FILE=/run/roadsense/postgres/password.previous\n'
+    printf 'POSTGRES_CONNECT_TIMEOUT_SECONDS=5\n'
+    printf 'POSTGRES_CONNECT_RETRIES=30\n'
     printf 'MQTT_CONNECT_RETRIES=10\n'
     printf 'MQTT_CONNECT_TIMEOUT_SECONDS=10\n'
     printf 'MQTT_PUBLISH_TIMEOUT_SECONDS=10\n'
@@ -94,6 +130,33 @@ if test "$force" = true || ! test -s "$phase02_env"; then
   } > "$phase02_env"
   chmod 600 "$phase02_env"
 fi
+
+ensure_setting() {
+  setting_name=$1
+  setting_value=$2
+  if ! grep -q "^${setting_name}=" "$phase02_env"; then
+    printf '%s=%s\n' "$setting_name" "$setting_value" >> "$phase02_env"
+  fi
+}
+
+ensure_setting MQTT_EVENT_TOPIC roadsense/v1/events
+ensure_setting ANALYZER_MQTT_CLIENT_ID roadsense-road-analyzer-local
+ensure_setting ANALYZER_QUEUE_CAPACITY 1024
+ensure_setting ANALYZER_VIBRATION_RMS_THRESHOLD_MG 100.0
+ensure_setting ANALYZER_RULE_VERSION roadsense-high-vibration-rms-v1-t100
+ensure_setting ANALYZER_SESSION_REGISTRY_FILE /app/session-registry.json
+ensure_setting POSTGRES_HOST postgres
+ensure_setting POSTGRES_PORT 5432
+ensure_setting POSTGRES_DB roadsense
+ensure_setting POSTGRES_USER roadsense
+sed -i '/^POSTGRES_PASSWORD=/d' "$phase02_env"
+ensure_setting POSTGRES_PASSWORD_FILE /run/roadsense/postgres/password
+ensure_setting POSTGRES_PREVIOUS_PASSWORD_FILE /run/roadsense/postgres/password.previous
+ensure_setting POSTGRES_CONNECT_TIMEOUT_SECONDS 5
+ensure_setting POSTGRES_CONNECT_RETRIES 30
+ensure_setting POSTGRES_CONNECT_RETRY_DELAY_SECONDS 1
+ensure_setting ANALYZER_OUTBOX_POLL_SECONDS 1
+chmod 600 "$phase02_env"
 
 openssl verify -CAfile "$runtime_dir/ca.crt" "$runtime_dir/server.crt" >/dev/null
 printf '%s\n' 'Phase 02 local credentials and TLS material: ready (ignored by Git)'

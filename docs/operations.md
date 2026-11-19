@@ -13,6 +13,22 @@ versions, the private dataset mount convention, loopback port plan, lifecycle
 commands, and troubleshooting are recorded in `local-development.md`. The
 application Compose stack remains deferred to Phases 02–05.
 
+Phase 04 uses named PostgreSQL and Mosquitto volumes. Routine teardown must not
+include `--volumes`. Mosquitto persists durable subscriptions/queued QoS 1
+messages; PostgreSQL uses an authenticated SQL health check and the analyzer
+retries temporary connection failures.
+
+The ignored PostgreSQL password file remains stable under
+`tools/prepare_phase02_local.sh --force`. Rotate it only with:
+
+```sh
+./tools/rotate_phase04_postgres_password.sh --apply
+```
+
+Rotation stages a fallback before changing the role and verifies the new login
+before promotion. If interrupted, retain `password.previous` and rerun the
+command after PostgreSQL is available; analyzer reconnects try both files.
+
 ## Step 2 — Package and publish
 - Build versioned/pinned images from the *same source* tested locally.
 - Push to an approved container registry only after test gates pass.
@@ -37,9 +53,12 @@ Reconnection/restart tests, run/window IDs and idempotency, structured sanitized
 ## Current configuration boundary
 
 The local Docker Desktop daemon, Phase 01 preflight, Phase 02 Sensor Replay,
-and Phase 03 source-time Signal Processor pipeline were verified. Private
+Phase 03 source-time Signal Processor, and Phase 04 analyzer/PostgreSQL
+pipeline were verified. Private
 dataset paths, credentials, and development certificate keys remain ignored;
-no daemon settings or unrelated workloads were changed. Phase 03 test
-containers/networks are removed after validation. VPS settings and Rahti
+no daemon settings or unrelated workloads were changed. Phase 04 test
+containers/networks are removed after validation; the named local PostgreSQL
+and Mosquitto volumes are intentionally retained to prove persistence. VPS
+settings and Rahti
 resources were not accessed or configured; their specifications, domains, TLS
 support, and quotas remain unverified.
