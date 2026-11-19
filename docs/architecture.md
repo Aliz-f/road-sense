@@ -26,6 +26,15 @@ LAPTOP: MUHOS CSV → feeder → MQTT broker → processor → MQTT broker → a
 ```
 In local Compose all containers communicate over a private Docker network using Docker service names. Dashboard uses local FastAPI address. All services are fully tested locally.
 
+Through Phase 03, the implemented local path is Sensor Replay → authenticated
+TLS Mosquitto → Signal Processor → MQTT feature topic. Sensor Replay also
+sends a provenance-bound run-completion control message so the processor can
+publish the final source-time window without stopping. The broker's one-message
+QoS inflight limit and the processor's manual acknowledgements provide bounded
+backpressure without blocking Paho's network callback. The processor has no
+host port, uses a read-only container filesystem, and derives windows only from
+source timestamps. Analyzer, storage, API, and dashboard remain future phases.
+
 ## Final deployed communication
 ```text
 PERSONAL VPS                                CSC RAHTI

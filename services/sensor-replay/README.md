@@ -8,6 +8,10 @@ The service verifies the archive SHA-256, exact CSV header, UTC timestamps,
 strict source-time ordering, and integer sensor values before publishing. Each
 run receives a UUID `run_id`; batches and samples carry contiguous
 `sequence_id` and `sample_index` values. QoS 1 acknowledgements are awaited.
+After every raw batch in a successful non-empty replay is acknowledged, the
+service publishes a provenance- and count-bound completion message to
+`roadsense/v1/imu/run-complete`. This closes that run's final source-time
+window without stopping the Signal Processor.
 
 Configuration is environment-only. `REPLAY_RATE=1` follows recorded source
 time, values above one accelerate playback, values between zero and one slow

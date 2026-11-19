@@ -6,7 +6,13 @@ import uuid
 from datetime import datetime, timezone
 
 from sensor_replay.model import ImuSample
-from sensor_replay.schema import build_raw_payload, encode_payload, validate_raw_payload
+from sensor_replay.schema import (
+    build_raw_payload,
+    build_run_complete_payload,
+    encode_payload,
+    validate_raw_payload,
+    validate_run_complete_payload,
+)
 
 
 def sample(index: int, millisecond: int) -> ImuSample:
@@ -51,3 +57,41 @@ class SchemaTests(unittest.TestCase):
         self.assertLess(len(encoded), 4096)
         with self.assertRaisesRegex(ValueError, "limit"):
             encode_payload(self.payload, 10)
+
+    def test_builds_run_complete_contract_payload(self) -> None:
+        completion = build_run_complete_payload(
+            run_id=self.run_id,
+            session_id="bumpy-gravel-20261019",
+            sensor_id="bosch-xdk-110",
+            source_archive_sha256="a" * 64,
+            source_member="imu/bosch_imu.csv",
+            raw_message_count=4,
+            sample_count=256,
+        )
+        validate_run_complete_payload(completion)
+        self.assertEqual(completion["last_sequence_id"], 3)
+        self.assertEqual(completion["last_sample_index"], 255)
+
+    def test_rejects_inconsistent_run_complete_counts(self) -> None:
+        completion = build_run_complete_payload(
+            run_id=self.run_id,
+            session_id="session",
+            sensor_id="sensor",
+            source_archive_sha256="a" * 64,
+            source_member="imu.csv",
+            raw_message_count=1,
+            sample_count=1,
+        )
+        completion["last_sample_index"] = 4
+        with self.assertRaisesRegex(ValueError, "last_sample_index"):
+            validate_run_complete_payload(completion)
+        with self.assertRaisesRegex(ValueError, "empty replay"):
+            build_run_complete_payload(
+                run_id=self.run_id,
+                session_id="session",
+                sensor_id="sensor",
+                source_archive_sha256="a" * 64,
+                source_member="imu.csv",
+                raw_message_count=0,
+                sample_count=0,
+            )

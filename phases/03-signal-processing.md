@@ -1,6 +1,8 @@
 # Phase 03 — Signal processing
 
-**Status:** Not started. Documentation only.
+**Status:** Completed locally on 2026-11-19 in branch
+`phase/03-signal-processing`. Phase 04 has not started. Evidence is recorded in
+`docs/phase-03-report.md`.
 
 ## Goal
 Compute repeatable vibration features on original-time windows using **the laptop's Docker Compose stack**.
@@ -21,11 +23,11 @@ Phase 02 MQTT data, verified sampling rate and axis interpretation.
 Processor code and Dockerfile, numeric tests, feature contract, sample charts and runbook.
 
 ## Acceptance / exit gate
-- [ ] Hand-verified synthetic signals match output
-- [ ] window calculation invariant under replay-rate changes
-- [ ] missing/duplicate samples handled
-- [ ] feature topic delivers records
-- [ ] do not label potholes.
+- [x] Hand-verified synthetic signals match output
+- [x] window calculation invariant under replay-rate changes
+- [x] missing/duplicate samples handled
+- [x] feature topic delivers records
+- [x] do not label potholes.
 
 ## Required phase report
 Codex must record actual commands (without secrets), files created, test commands and results, observed output screenshots/logs, assumptions, unresolved risks and the rollback procedure when relevant. Do not mark complete on unverified claims.

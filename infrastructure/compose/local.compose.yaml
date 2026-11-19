@@ -25,6 +25,31 @@ x-sensor-environment: &sensor-environment
   security_opt:
     - no-new-privileges:true
 
+x-processor-image: &processor-image
+  image: roadsense/signal-processor:phase03-local
+  build:
+    context: ../..
+    dockerfile: services/signal-processor/Dockerfile
+    target: runtime
+
+x-processor-environment: &processor-environment
+  env_file:
+    - ../../config/environments/local/.env.phase02
+  volumes:
+    - type: bind
+      source: ${MQTT_RUNTIME_DIR:?run tools/prepare_phase02_local.sh}/ca.crt
+      target: /run/roadsense/mqtt/ca.crt
+      read_only: true
+  networks:
+    - roadsense
+  read_only: true
+  tmpfs:
+    - /tmp:rw,noexec,nosuid,size=8m
+  cap_drop:
+    - ALL
+  security_opt:
+    - no-new-privileges:true
+
 services:
   mqtt-auth-init:
     image: eclipse-mosquitto:2.0.22@sha256:81a6193ae693942a3231cd3ac52875b02b7e3a19da671b2fb4b55cc874c5b279
@@ -35,7 +60,7 @@ services:
     command:
       - |
         mosquitto_passwd -b -c /run/roadsense/mqtt/password_file "$$MQTT_USERNAME" "$$MQTT_PASSWORD"
-        printf 'user %s\ntopic readwrite roadsense/v1/imu/raw\ntopic read $$SYS/#\n' "$$MQTT_USERNAME" > /run/roadsense/mqtt/acl_file
+        printf 'user %s\ntopic readwrite roadsense/v1/imu/raw\ntopic readwrite roadsense/v1/imu/run-complete\ntopic readwrite roadsense/v1/imu/features\ntopic read $$SYS/#\n' "$$MQTT_USERNAME" > /run/roadsense/mqtt/acl_file
         chmod 600 /run/roadsense/mqtt/password_file /run/roadsense/mqtt/acl_file
     volumes:
       - type: bind
@@ -103,9 +128,25 @@ services:
         read_only: true
     restart: "no"
 
+  signal-processor:
+    <<: [*processor-image, *processor-environment]
+    environment:
+      PROCESSOR_QUEUE_CAPACITY: ${PROCESSOR_QUEUE_CAPACITY:-1024}
+    depends_on:
+      mqtt-broker:
+        condition: service_healthy
+    stop_grace_period: 15s
+    restart: unless-stopped
+
   mqtt-subscriber:
     <<: [*sensor-image, *sensor-environment]
     entrypoint: ["python", "-m", "sensor_replay.subscriber"]
+    profiles: ["test"]
+    restart: "no"
+
+  feature-subscriber:
+    <<: [*processor-image, *processor-environment]
+    entrypoint: ["python", "-m", "signal_processor.feature_subscriber"]
     profiles: ["test"]
     restart: "no"
 
@@ -114,6 +155,22 @@ services:
     build:
       context: ../..
       dockerfile: services/sensor-replay/Dockerfile
+      target: test
+    profiles: ["test"]
+    network_mode: none
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+  processor-unit-tests:
+    image: roadsense/signal-processor-test:phase03-local
+    build:
+      context: ../..
+      dockerfile: services/signal-processor/Dockerfile
       target: test
     profiles: ["test"]
     network_mode: none

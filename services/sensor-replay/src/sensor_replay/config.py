@@ -41,6 +41,7 @@ class ReplayConfig:
     mqtt_password: str
     mqtt_tls_ca_file: Path
     mqtt_topic: str
+    mqtt_run_complete_topic: str
     mqtt_connect_retries: int
     mqtt_connect_timeout_seconds: float
 
@@ -78,6 +79,9 @@ class ReplayConfig:
             mqtt_password=required("MQTT_PASSWORD"),
             mqtt_tls_ca_file=Path(required("MQTT_TLS_CA_FILE")),
             mqtt_topic=os.getenv("MQTT_TOPIC", "roadsense/v1/imu/raw"),
+            mqtt_run_complete_topic=os.getenv(
+                "MQTT_RUN_COMPLETE_TOPIC", "roadsense/v1/imu/run-complete"
+            ),
             mqtt_connect_retries=integer("MQTT_CONNECT_RETRIES", 10, 1, 100),
             mqtt_connect_timeout_seconds=connect_timeout,
         )

@@ -36,7 +36,7 @@ directory. This laptop uses:
 /home/alireza/aliz_projects/road-sense/data/raw/archives
 ```
 
-Future sensor-replay Compose configuration must use this bind mount:
+The Sensor Replay Compose service uses this bind mount:
 
 ```yaml
 volumes:
@@ -49,17 +49,16 @@ volumes:
 The selected MVP input remains archive `Bumpy Gravel - imu.tar`, member
 `imu/bosch_imu.csv`. The archive is read directly; no extracted CSV is needed.
 
-## Planned local Compose boundary
+## Local Compose boundary
 
-The application Compose file is intentionally deferred to Phase 02. Use one
-project name (`roadsense-local`) and one private application network. Containers
-communicate using these service names:
+The application Compose file uses one project name (`roadsense-local`) and one
+private application network. Containers communicate using these service names:
 
-| Service | Planned health signal | Host publication |
+| Service | Health/readiness signal | Host publication |
 |---|---|---|
-| `mqtt-broker` | authenticated TLS MQTT connection | none in Phase 02; internal Compose network only |
+| `mqtt-broker` | authenticated TLS MQTT connection | none; internal Compose network only |
 | `sensor-replay` | process/readiness state | none |
-| `signal-processor` | subscriber/process state | none |
+| `signal-processor` | authenticated raw/completion subscriptions and structured ready event | none |
 | `road-analyzer` | DB and MQTT readiness | none |
 | `postgres` | `pg_isready` | none by default; if needed, `127.0.0.1:5432` only |
 | `api` | HTTP `/health/ready` | `127.0.0.1:8000` |
@@ -95,14 +94,19 @@ Optional cache rollback, only if the image is not used elsewhere:
 docker image rm docker.io/library/busybox:1.36.1
 ```
 
-Phase 02 created `infrastructure/compose/local.compose.yaml`. Generate the
-ignored local credentials/certificates, then use the explicit Phase 02
-environment and Compose paths consistently:
+Phase 02 created `infrastructure/compose/local.compose.yaml`; Phase 03 added
+Signal Processor and the `roadsense/v1/imu/run-complete` control path. The
+local broker limits a subscriber to one unacknowledged QoS message; the
+processor manually acknowledges after processing so its bounded queue applies
+backpressure without blocking the Paho callback. Generate the ignored local
+credentials/certificates, then use the explicit environment and Compose paths
+consistently:
 
 ```sh
 ./tools/prepare_phase02_local.sh
 docker compose --env-file config/environments/local/.env.phase02 \
-  -f infrastructure/compose/local.compose.yaml up --build -d --wait mqtt-broker
+  -f infrastructure/compose/local.compose.yaml up --build -d --wait \
+  mqtt-broker signal-processor
 docker compose --env-file config/environments/local/.env.phase02 \
   -f infrastructure/compose/local.compose.yaml run --rm sensor-replay
 docker compose --env-file config/environments/local/.env.phase02 \
@@ -122,7 +126,7 @@ that would remove local database data.
   is `running` before changing permissions or configuration.
 - A socket error only inside a sandbox does not prove the daemon is down. Check
   `docker version` in the normal user terminal.
-- The Phase 02 broker publishes no host port. If a future debugging port is
+- The local broker publishes no host port. If a future debugging port is
   authorized, inspect conflicts with `ss -ltn` and bind it only to `127.0.0.1`.
 - Use `docker compose config` before `up`; inspect with `docker compose ps` and
   `docker compose logs --tail=100`.

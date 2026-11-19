@@ -9,6 +9,7 @@ from .events import emit, emit_error
 from .mqtt_client import MqttPublisher
 from .parser import iter_imu_samples
 from .replay import replay
+from .schema import build_run_complete_payload, encode_payload
 
 
 def main() -> int:
@@ -66,6 +67,27 @@ def main() -> int:
             replay_rate=config.replay_rate,
             stop_event=stop_event,
         )
+        if not stop_event.is_set():
+            completion = build_run_complete_payload(
+                run_id=config.run_id,
+                session_id=config.session_id,
+                sensor_id=config.sensor_id,
+                source_archive_sha256=config.source_archive_sha256,
+                source_member=config.source_member,
+                raw_message_count=messages,
+                sample_count=samples_published,
+            )
+            publisher.publish(
+                config.mqtt_run_complete_topic,
+                encode_payload(completion, config.max_payload_bytes),
+            )
+            emit(
+                "run_complete_published",
+                run_id=config.run_id,
+                raw_message_count=messages,
+                sample_count=samples_published,
+                topic=config.mqtt_run_complete_topic,
+            )
         emit(
             "replay_finished" if not stop_event.is_set() else "replay_stopped",
             run_id=config.run_id,
