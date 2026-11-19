@@ -36,8 +36,9 @@ Reconnection/restart tests, run/window IDs and idempotency, structured sanitized
 
 ## Current configuration boundary
 
-The local Docker Desktop daemon and an isolated Phase 01 preflight were
-verified. A private, ignored local dataset-path file was prepared; no daemon
-settings or existing workloads were changed. No application stack is running.
-VPS settings and Rahti resources were not accessed or configured; their
-specifications, domains, TLS support, and quotas remain unverified.
+The local Docker Desktop daemon, Phase 01 preflight, and Phase 02 Sensor Replay
+→ TLS MQTT pipeline were verified. Private dataset paths, credentials, and
+development certificate keys remain ignored; no daemon settings or unrelated
+workloads were changed. Phase 02 test containers/networks were removed after
+validation. VPS settings and Rahti resources were not accessed or configured;
+their specifications, domains, TLS support, and quotas remain unverified.

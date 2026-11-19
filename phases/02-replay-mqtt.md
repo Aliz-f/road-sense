@@ -1,6 +1,7 @@
 # Phase 02 — Local Sensor Feeder + MQTT
 
-**Status:** Not started. Documentation only.
+**Status:** Completed on 2026-11-19 in branch `phase/02-replay-mqtt`. Phase 03
+has not started. Evidence is recorded in `docs/phase-02-report.md`.
 
 ## Goal
 Run the first sensor-streaming pipeline **entirely on the laptop** using Docker Compose.
@@ -20,11 +21,16 @@ Phase 00 verified Bosch IMU data; Phase 01 laptop Docker setup; docs/contracts.m
 `services/sensor-replay` code/Dockerfile and tests; local broker configuration and Compose; tested MQTT samples and developer runbook.
 
 ## Exit checklist
-- [ ] Actual IMU CSV successfully replayed from laptop.
-- [ ] Local broker accepts authenticated messages and local subscriber receives them.
-- [ ] Source time, run_id, sequence preserved and playback adjustable.
-- [ ] No publicly exposed broker or credentials in Git.
-- [ ] No services deployed remotely.
+- [x] Actual IMU CSV successfully replayed from laptop.
+- [x] Local broker accepts authenticated messages and local subscriber receives them.
+- [x] Source time, run_id, sequence preserved and playback adjustable.
+- [x] No publicly exposed broker or credentials in Git.
+- [x] No services deployed remotely.
+
+The full bumpy-gravel recording (62,169 rows) was delivered as 972 QoS 1
+batches to a separate schema-validating subscriber over authenticated TLS. The
+broker published no host port. Validation cleanup removed the project
+containers and network.
 
 ## Codex request
 Implement **only Phase 02** using local laptop Docker Compose. Do not use the VPS or Rahti. Provide runnable test evidence, then stop.

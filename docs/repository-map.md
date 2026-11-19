@@ -6,7 +6,7 @@ docs/: design decisions, architecture, contracts, operations and submission.
 config/environments/: secret-free environment templates; actual `.env` files are private and ignored.
 phases/: eight ordered implementation specifications and acceptance criteria.
 architecture/road-sense.mmd: editable conceptual diagram.
-services/sensor-replay/: developed on laptop in Phase 02; later deployed to VPS in Phase 06.
+services/sensor-replay/: local MUHOS-to-MQTT replay implementation, Phase 02; later deployed to VPS in Phase 06.
 services/signal-processor/: Rahti window feature calculation, Phase 03.
 services/road-analyzer/: Rahti rules + persistence, Phase 04.
 services/api/: Rahti HTTP API, Phase 05.
@@ -15,8 +15,8 @@ infrastructure/vps/: private VPS deployment/runbook, Phase 06.
 infrastructure/compose/: Phase 01 preflight, complete laptop development stack (Phases 02–05), and VPS runtime stack (Phase 06).
 infrastructure/rahti/: Kubernetes manifests/runbooks, Phase 06.
 data/: documented acquisition and private data mounts, Phase 00.
-tools/: dependency-free dataset inspection and local validation utilities, Phases 00–01.
-tests/: tests created during future implementation phases.
+tools/: dataset inspection, local validation, and ignored Phase 02 credential/TLS preparation utilities.
+tests/: Phase 02 MQTT integration test plus future cross-service tests.
 
 All empty directories contain README files for documentation-only placeholders.
 No Dockerfiles, Python application scripts, Kubernetes manifests, or cloud

@@ -57,7 +57,7 @@ communicate using these service names:
 
 | Service | Planned health signal | Host publication |
 |---|---|---|
-| `mqtt-broker` | authenticated MQTT connection | `127.0.0.1:1883`, development diagnostics only |
+| `mqtt-broker` | authenticated TLS MQTT connection | none in Phase 02; internal Compose network only |
 | `sensor-replay` | process/readiness state | none |
 | `signal-processor` | subscriber/process state | none |
 | `road-analyzer` | DB and MQTT readiness | none |
@@ -95,20 +95,21 @@ Optional cache rollback, only if the image is not used elsewhere:
 docker image rm docker.io/library/busybox:1.36.1
 ```
 
-Phase 02 is expected to create the application file at
-`infrastructure/compose/local.compose.yaml`. Until that file exists, the
-following commands are illustrative and must not be run. Once it exists, use
-the explicit environment and Compose paths consistently for every lifecycle
-operation:
+Phase 02 created `infrastructure/compose/local.compose.yaml`. Generate the
+ignored local credentials/certificates, then use the explicit Phase 02
+environment and Compose paths consistently:
 
 ```sh
-docker compose --env-file config/environments/local/.env \
-  -f infrastructure/compose/local.compose.yaml up --build --wait
-docker compose --env-file config/environments/local/.env \
+./tools/prepare_phase02_local.sh
+docker compose --env-file config/environments/local/.env.phase02 \
+  -f infrastructure/compose/local.compose.yaml up --build -d --wait mqtt-broker
+docker compose --env-file config/environments/local/.env.phase02 \
+  -f infrastructure/compose/local.compose.yaml run --rm sensor-replay
+docker compose --env-file config/environments/local/.env.phase02 \
   -f infrastructure/compose/local.compose.yaml ps
-docker compose --env-file config/environments/local/.env \
+docker compose --env-file config/environments/local/.env.phase02 \
   -f infrastructure/compose/local.compose.yaml logs --tail=100
-docker compose --env-file config/environments/local/.env \
+docker compose --env-file config/environments/local/.env.phase02 \
   -f infrastructure/compose/local.compose.yaml down --remove-orphans
 ```
 
@@ -121,8 +122,8 @@ that would remove local database data.
   is `running` before changing permissions or configuration.
 - A socket error only inside a sandbox does not prove the daemon is down. Check
   `docker version` in the normal user terminal.
-- Inspect conflicts with `ss -ltn` and ensure all published RoadSense addresses
-  remain `127.0.0.1`. At inspection time, 1883, 5432, 8000, and 8501 were free.
+- The Phase 02 broker publishes no host port. If a future debugging port is
+  authorized, inspect conflicts with `ss -ltn` and bind it only to `127.0.0.1`.
 - Use `docker compose config` before `up`; inspect with `docker compose ps` and
   `docker compose logs --tail=100`.
 - The laptop already runs unrelated Minikube/course containers. Use the unique

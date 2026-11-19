@@ -1,9 +1,10 @@
 # Environment templates
 
-Only `local/.env.example` is used during Phases 01-05. Copy it to
-`local/.env`, replace the dataset root with an absolute private path, and set
-future credentials locally when their services are introduced. Every `.env`
-file is ignored by Git; `.env.example` files contain no secrets.
+`local/.env` stores the Phase 01 private dataset root. Phase 02 generates
+`local/.env.phase02` plus development TLS material under `local/runtime/`; both
+are ignored by Git. Run `../../tools/prepare_phase02_local.sh` rather than
+committing credentials. Every `.env` file is ignored by Git; `.env.example`
+files contain no secrets.
 
 The `vps` and `rahti` examples are variable-name inventories for Phase 06.
 They do not authorize remote access, deployment, or secret creation.
