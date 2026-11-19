@@ -4,9 +4,13 @@
 
 RoadSense is a Software Defined Systems final-project design. It replays [MUHOS](https://m3s-kuura.github.io/muhos-dataset/) Bosch IMU measurements to explore vehicle vibration patterns in a distributed system. Vibration alerts are exploratory metrics, **not validated pothole or road-safety detection**.
 
-## Hosting plan
+## Workflow: develop locally first, then deploy
 
-| VPS — Docker Compose | CSC Rahti — OpenShift/Kubernetes |
+**Development (Phases 00–05):** run the **entire app on the local laptop using Docker Compose**, including feeder, broker, processor, analyzer, PostgreSQL, FastAPI, and dashboard. Complete local testing before remote deployments.
+
+**Final deployment (Phase 06):**
+
+| Your own VPS — Docker Compose | CSC Rahti — OpenShift/Kubernetes |
 |---|---|
 | Private MUHOS dataset files | Mosquitto MQTT broker |
 | Python Sensor Replay (CSV to MQTT) | Python Signal Processor |
@@ -32,12 +36,12 @@ Data flow: **MUHOS CSV → VPS Sensor Replay → MQTT/TLS → Rahti Broker → S
 | Phase | Objective | Phase instructions |
 |---|---|---|
 | 00 | Verify MUHOS files and course rules | [Open](phases/00-scope-data.md) |
-| 01 | Prepare and secure the VPS | [Open](phases/01-vps-foundation.md) |
-| 02 | Replay IMU CSV using Python/Docker/MQTT | [Open](phases/02-replay-mqtt.md) |
+| 01 | Prepare local laptop Docker/Compose development | [Open](phases/01-local-foundation.md) |
+| 02 | Replay IMU CSV locally using Python/Docker/MQTT | [Open](phases/02-replay-mqtt.md) |
 | 03 | Compute vibration features from MQTT streams | [Open](phases/03-signal-processing.md) |
 | 04 | Add rules and persistent PostgreSQL storage | [Open](phases/04-analyzer-storage.md) |
-| 05 | Build FastAPI and the Streamlit dashboard | [Open](phases/05-api-dashboard.md) |
-| 06 | Move backend services to Rahti; link VPS | [Open](phases/06-rahti-integration.md) |
+| 05 | Complete full application locally with FastAPI/Streamlit | [Open](phases/05-api-dashboard.md) |
+| 06 | Deploy the tested system to personal VPS and Rahti | [Open](phases/06-rahti-integration.md) |
 | 07 | Verify, demonstrate, document and submit | [Open](phases/07-final-submission.md) |
 
 Each phase document contains a **goal, prerequisites, tasks for Codex, deliverables, acceptance criteria, and a copyable Codex request**. Codex should implement one phase per branch and stop before starting the next.
@@ -57,9 +61,9 @@ Each phase document contains a **goal, prerequisites, tasks for Codex, deliverab
 
 ## Scope and key decisions
 
-MVP: replay one verified Bosch IMU CSV recording; compute time-window vibration RMS/peak; report high-vibration events; store and visualize results; demonstrate VPS-to-Rahti communication. Optional later: CAN speed after checking dataset units and timing. **No ML, ROS2, LiDAR, raw camera analysis, or real vehicle integration.**
+MVP: replay one verified Bosch IMU CSV recording; compute time-window vibration RMS/peak; report high-vibration events; store and visualize results; demonstrate **both** full local laptop integration and VPS-to-Rahti communication. Optional later: CAN speed after checking dataset units and timing. **No ML, ROS2, LiDAR, raw camera analysis, or real vehicle integration.**
 
-**Course compliance question:** verify that a VPS counts for any assignment wording requiring a 'local Docker' component. If not, also demonstrate a laptop Compose client. The [official course repo](https://gitlab.com/sdx-oulu/2024/hw-and-project) may require submission in its GitLab `Final-Project/` path rather than this GitHub repository. Check [submission instructions](https://gitlab.com/sdx-oulu/2024/hw-and-project/-/blob/main/Final-Project/README.md) at Phase 00.
+**Course validation:** full local Docker Compose development on the laptop is included. The personally owned VPS is a remote runtime, not a substitute for local testing. Recheck precise official requirements before final submission. The [official course repo](https://gitlab.com/sdx-oulu/2024/hw-and-project) may require submission in its GitLab `Final-Project/` path rather than this GitHub repository. Check [submission instructions](https://gitlab.com/sdx-oulu/2024/hw-and-project/-/blob/main/Final-Project/README.md) at Phase 00.
 
 Data source: [MUHOS documentation](https://m3s-kuura.github.io/muhos-dataset/). License, citation, schema, timestamps and units must be verified from actual downloaded files before implementation. Never commit raw archives or credentials.
 

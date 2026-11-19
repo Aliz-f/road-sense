@@ -1,19 +1,33 @@
-# Deployment, security, and operations plan
+# Operations — laptop first; deploy to personal VPS and CSC Rahti later
 
-## VPS — before installing or changing anything
-Inventory OS, vCPU, RAM, disk, firewall, SSH access, Docker and Compose versions, domain and backup policy. Ask for explicit approval for firewall, SSH, DNS, package installation and public endpoints. Keep dataset directory restricted and mounted read-only. Limit dashboard to VPN/SSH tunnel or HTTPS + auth.
+## Step 1 — Development on laptop
+- Check laptop Docker Engine/Compose versions and available CPU/RAM/disk.
+- Work in a local Git clone. Mount MUHOS CSV files from a private `data/raw` directory excluded from Git.
+- Start full stack via Docker Compose: feeder, broker, processor, analyzer, DB, API, Streamlit.
+- Use Docker's private service network. Bind developer-facing ports to 127.0.0.1; passwords stored outside Git.
+- Run parser, numeric signal, MQTT, idempotency, REST and UI smoke tests. Do not move to deployment before a full local pass.
+- Debug with `docker compose ps`, `docker compose logs` and controlled replay sessions.
 
-## Development deployment
-First run broker and all application services on the VPS via Compose with service-only networking. Bind development ports to 127.0.0.1 and avoid public unauthenticated interfaces. Prove end-to-end functionality before migrating services.
+## Step 2 — Package and publish
+- Build versioned/pinned images from the *same source* tested locally.
+- Push to an approved container registry only after test gates pass.
+- Keep environment-specific hostnames, credentials, TLS certificates and data mounts out of images.
 
-## Rahti deployment
-Check project namespace, quota, storage class, image registry, security context, route/TLS policy and image-pull credentials. Deploy PostgreSQL with PVC and backup, broker with verified TLS and ACL, processor and analyzer as Deployments, FastAPI behind authenticated HTTPS. Restrict DB to internal Service only. Set resource requests/limits, health probes and non-root containers.
+## Step 3 — Personal VPS deployment
+- Before changing the VPS, confirm OS/resources, SSH/firewall, backup/rollback and Docker/Compose. Require owner's explicit approval for system changes.
+- Install/configure Docker Compose securely and copy/mount MUHOS recordings to private read-only storage.
+- Run only `sensor-replay` and `dashboard` as persistent Compose services, with configured Rahti MQTT and HTTPS API URLs.
+- Prefer dashboard access through VPN/SSH tunnel; otherwise HTTPS + authentication. No public DB or broker on VPS.
 
-## Final split
-VPS Compose: sensor-replay and dashboard. Rahti: broker, processor, analyzer, PostgreSQL, API. VPS feeder calls broker outbound over MQTT/TLS; VPS dashboard calls API outbound HTTPS. Keep endpoints configurable via .env/secret injection, never hard-code credentials.
+## Step 4 — Rahti deployment
+- Verify namespace, quotas, image registry, storage class, TLS/Routes, and credentials.
+- Run broker, processor, analyzer, PostgreSQL with PVC and API using OpenShift/Kubernetes.
+- Authenticate MQTT clients; restrict topics; validate MQTT TLS passthrough/alternative supported endpoint.
+- Keep PostgreSQL an internal Service; expose API only over guarded HTTPS; protect all Secrets.
+- Test the remote pipeline VPS feeder → Rahti processing/database/API → VPS dashboard.
 
-## Operations
-Structured logs with service/run_id/sequence/window index (no raw sensitive samples). Monitor message counts, reconnects, invalid records, DB failures, API health. Provide startup, shutdown, tests, backup/restore, rolling update and rollback instructions. Use explicit cleanup safeguards to prevent unintentional deletion of data.
+## Reliability and evidence
+Reconnection/restart tests, run/window IDs and idempotency, structured sanitized logs, persistent volume backup/restore, rollout and rollback instructions. No unapproved remote changes; no production claim before actual deployed end-to-end test.
 
-## Unknown until checked
-VPS specs, public DNS, firewall rules, Rahti quota, TLS passthrough feasibility, course interpretation of VPS vs local computer, dataset license/citation. No deployment or environment configuration has been made.
+## Not configured yet
+No local Docker environment, VPS settings or Rahti resources were changed by these planning documents. VPS specifications, domains, actual Rahti TLS support and database quotas remain unverified.

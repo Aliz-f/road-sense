@@ -7,10 +7,10 @@ STATUS: PLANNING ONLY. No application code or infrastructure must be created unt
 3. Check actual MUHOS files, official course instructions and Rahti limitations; never invent observed data, units, timestamps, or test outcomes.
 4. Work in a phase-specific branch/PR. Avoid modifying unrelated services.
 5. For implementations: add tests, exact run commands, sanitized logs and an implementation report.
-6. Require approval before installing VPS packages, changing SSH/firewall/DNS, spending money, exposing public services, or deploying to Rahti.
+6. Require approval before installing local or VPS packages, changing SSH/firewall/DNS, spending money, exposing public services, or deploying to Rahti.
 7. No secrets, private files or raw dataset archives in Git. Pin image versions, authenticate MQTT, use TLS, keep DB internal.
 8. Use run_id/sequence_id for traceability; design for duplicate MQTT messages and service restart.
 9. Project measures exploratory vehicle vibrations, NOT scientifically validated potholes or safety classifications.
 10. Stop after completing the chosen phase; report blockers and unmet checks without claiming success.
 
-Important: the GitHub repository is the development source; verify the separate GitLab course submission requirements and whether VPS fulfills the course's local machine criterion.
+**Mandatory workflow:** Phases 00–05 run and are tested entirely on the user's **local laptop** using Docker Compose. Only Phase 06 deploys services to the personally owned **VPS** and **CSC Rahti**; do not touch either remote environment earlier. The GitHub repo is the development source; verify separate GitLab submission requirements.

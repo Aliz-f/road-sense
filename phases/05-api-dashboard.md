@@ -1,32 +1,31 @@
-# Phase 05 — API and dashboard
+# Phase 05 — Local FastAPI and Streamlit Dashboard
 
 **Status:** Not started. Documentation only.
 
 ## Goal
-Show a working end-to-end product in the VPS browser, before cloud migration.
+Complete the **whole application on the laptop**, running all services via Docker Compose and a local browser.
 
-## Prerequisites / inputs
-Phase 04 persisted data; API contracts and access plan.
+## Inputs
+Phases 02–04 implemented locally, PostgreSQL data and API contracts.
 
-## Detailed instructions for Codex
-1. Build FastAPI routes for health/sessions/runs/features/events with validation and pagination
-2. build Streamlit/Plotly run selector, vibration chart, alert list and source caveat
-3. use HTTP between dashboard and API (never direct DB)
-4. keep dashboard private or protected
-5. add tests and all-in-one Compose smoke test.
+## Instructions
+1. Create FastAPI endpoints for health, recordings, runs, features and alerts; use typed validation and pagination.
+2. Create Streamlit + Plotly dashboard with recording selection, vibration charts, event display, processing status and methodology limitations.
+3. Keep dashboard ↔ API communication over HTTP (no direct DB or MQTT in dashboard).
+4. Add API unit tests, dashboard smoke tests, and local Compose integration test using real MUHOS recordings.
+5. Configure accessible laptop browser URL via loopback while keeping DB/MQTT ports internal.
+6. Verify full laptop pipeline: CSV → feeder → MQTT → processor → analyzer → DB → API → dashboard.
+7. Document full local startup/shutdown and capture sanitized demo evidence.
 
-## Deliverables / documentation
-API/Dashboard service directories with Dockerfiles, tested local Compose runbook, screenshots and e2e report.
+## Deliverables
+Dockerized FastAPI and Streamlit services, complete laptop Compose environment, automated/smoke tests and local end-to-end report.
 
-## Acceptance / exit gate
-- [ ] Real recorded stream appears in UI
-- [ ] API returns correct stored results
-- [ ] empty/error states handled
-- [ ] dashboard auth/access controlled
-- [ ] no direct browser connection to DB.
+## Exit checklist
+- [ ] All seven services operate together **on laptop**.
+- [ ] Real IMU source produces features, events, API records and visualization.
+- [ ] Each service has independent container ownership and documented logs.
+- [ ] HTTP paths validated, non-sensitive local ports accessible.
+- [ ] App works end-to-end without VPS or Rahti.
 
-## Required phase report
-Codex must record actual commands (without secrets), files created, test commands and results, observed output screenshots/logs, assumptions, unresolved risks and the rollback procedure when relevant. Do not mark complete on unverified claims.
-
-## Copyable Codex request
-Implement **only Phase 05** for RoadSense. First read AGENTS.md, README.md, docs/architecture.md, docs/contracts.md, docs/operations.md, and this phase. Work in a dedicated branch, follow the prerequisites and acceptance gates, deliver the listed documentation and tests, and STOP before the next phase. Do not invent dataset facts, successful tests, or cloud deployment status.
+## Codex request
+Implement **only Phase 05**. Finish the app on my **local laptop** with full Docker Compose integration and tests. Do not deploy remotely or start Phase 06.

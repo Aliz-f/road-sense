@@ -9,7 +9,7 @@ Prove system correctness and deliver artifacts matching current course rules.
 Successful Phase 06 integration; current official course instructions and owner approval for recording/submission.
 
 ## Detailed instructions for Codex
-1. Run integration/numeric/idempotency/restart/security tests
+1. Reconfirm full local laptop Compose evidence AND final VPS/Rahti running evidence; run integration/numeric/idempotency/restart/security tests
 2. compare 2 sessions with speed caveats
 3. capture sanitized logs and resource screenshots
 4. export Mermaid diagram to arch.png after matching actual system

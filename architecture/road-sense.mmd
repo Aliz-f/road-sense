@@ -1,28 +1,42 @@
 flowchart TB
-  subgraph VPS["VPS / Docker Compose"]
-    DS["MUHOS Bosch IMU CSV\nprivate read-only data directory"]
-    FEED["sensor-replay\nPython + Pandas + MQTT"]
-    UI["dashboard\nStreamlit + Plotly"]
-    DS --> FEED
+  subgraph LAPTOP["PHASES 00–05: LOCAL LAPTOP — Docker Compose"]
+    LD["Private MUHOS CSV files"]
+    LF["sensor-replay"]
+    LM["Mosquitto"]
+    LP["signal-processor"]
+    LA["road-analyzer"]
+    LDB[("PostgreSQL")]
+    LAPI["FastAPI"]
+    LUI["Streamlit"]
+    LD --> LF --> LM --> LP
+    LP -->|"features via MQTT"| LM
+    LM -->|"feature topic"| LA
+    LA --> LDB --> LAPI --> LUI
   end
 
-  subgraph RAHTI["CSC Rahti / Kubernetes OpenShift"]
-    ROUTEM["MQTT/TLS Route\nauthenticated"]
-    MQ["Mosquitto MQTT Broker"]
-    SP["signal-processor\nPython + NumPy/SciPy"]
-    AN["road-analyzer\nthreshold rules"]
-    PG[("PostgreSQL\nPersistentVolumeClaim")]
-    ROUTEA["HTTPS API Route\nauthenticated"]
-    API["FastAPI REST"]
-    ROUTEM --> MQ
-    MQ -->|"raw topic"| SP
-    SP -->|"publish features topic"| MQ
-    MQ -->|"subscribe features"| AN
-    AN -->|"SQL upsert"| PG
-    PG -->|"SQL query"| API
-    ROUTEA --> API
+  subgraph VPS["PHASE 06: PERSONAL VPS — Docker Compose"]
+    VD["Private MUHOS CSV"]
+    VF["sensor-replay"]
+    VUI["Streamlit dashboard"]
+    VD --> VF
+  end
+  subgraph RAHTI["PHASE 06: CSC RAHTI — Kubernetes/OpenShift"]
+    RMT["MQTT TLS endpoint"]
+    RM["Mosquitto"]
+    RP["signal-processor"]
+    RA["road-analyzer"]
+    RDB[("PostgreSQL with PVC")]
+    RAPI["FastAPI"]
+    RHT["HTTPS API endpoint"]
+    RMT --> RM
+    RM -->|"raw"| RP
+    RP -->|"features via broker"| RM
+    RM -->|"features"| RA
+    RA --> RDB --> RAPI --> RHT
   end
 
-  FEED -->|"MQTT/TLS outbound"| ROUTEM
-  UI -->|"HTTPS outbound"| ROUTEA
-  BROWSER["User browser"] -->|"VPN / HTTPS + auth"| UI
+  LAPTOP -.->|"after local tests: build, push images & deploy"| VPS
+  LAPTOP -.->|"after local tests: build, push images & deploy"| RAHTI
+  VF -->|"authenticated MQTT/TLS"| RMT
+  VUI -->|"HTTPS"| RHT
+  USER["User browser"] -->|"VPN or secured HTTPS"| VUI

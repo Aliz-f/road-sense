@@ -3,7 +3,7 @@
 **Status:** Not started. Documentation only.
 
 ## Goal
-Convert feature streams into simple explained events and durable records.
+Convert feature streams into simple explained events and durable records **on the laptop's Docker Compose environment**.
 
 ## Prerequisites / inputs
 Phase 03 features, DB schema, initial documented heuristic threshold.

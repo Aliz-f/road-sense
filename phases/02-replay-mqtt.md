@@ -1,33 +1,30 @@
-# Phase 02 — Sensor feeder and MQTT
+# Phase 02 — Local Sensor Feeder + MQTT
 
 **Status:** Not started. Documentation only.
 
 ## Goal
-Replay genuine Bosch IMU data from the VPS into an MQTT broker in local Compose.
+Run the first sensor-streaming pipeline **entirely on the laptop** using Docker Compose.
 
-## Prerequisites / inputs
-Actual profiled dataset and secured VPS; MQTT raw JSON v1 contract.
+## Inputs
+Phase 00 verified Bosch IMU data; Phase 01 laptop Docker setup; docs/contracts.md.
 
-## Detailed instructions for Codex
-1. Write Python CSV reader with run_id, session_id, batches, sample index, source timestamps, configurable replay speed and graceful shutdown
-2. Dockerize it
-3. run local Mosquitto on Compose network with credentials
-4. publish roadsense/v1/imu/raw
-5. add test subscriber and parser tests
-6. log sanitized evidence.
+## Instructions
+1. Implement independent Python feeder to parse recorded IMU CSVs into bounded MQTT batches preserving source timestamps.
+2. Add recording/session metadata, unique run_id, sequence and sample_index, configurable replay rate, graceful shutdown and structured logs.
+3. Dockerize feeder and run Mosquitto as a second service **in local Docker Compose**. Use development authentication and internal network.
+4. Publish `roadsense/v1/imu/raw`; verify with a separate local test subscriber.
+5. Add parser, schema, timestamp and reconnect tests.
+6. Document local run/stop and sample output, avoiding secrets and raw dataset commits.
 
-## Deliverables / documentation
-services/sensor-replay, Dockerfile, Compose broker definition, tests, README, real message sample.
+## Deliverables
+`services/sensor-replay` code/Dockerfile and tests; local broker configuration and Compose; tested MQTT samples and developer runbook.
 
-## Acceptance / exit gate
-- [ ] One recording reliably replayed
-- [ ] subscribed client receives ordered JSON messages
-- [ ] topic auth works
-- [ ] replay rate configurable
-- [ ] no unauthenticated public broker or secrets in Git.
+## Exit checklist
+- [ ] Actual IMU CSV successfully replayed from laptop.
+- [ ] Local broker accepts authenticated messages and local subscriber receives them.
+- [ ] Source time, run_id, sequence preserved and playback adjustable.
+- [ ] No publicly exposed broker or credentials in Git.
+- [ ] No services deployed remotely.
 
-## Required phase report
-Codex must record actual commands (without secrets), files created, test commands and results, observed output screenshots/logs, assumptions, unresolved risks and the rollback procedure when relevant. Do not mark complete on unverified claims.
-
-## Copyable Codex request
-Implement **only Phase 02** for RoadSense. First read AGENTS.md, README.md, docs/architecture.md, docs/contracts.md, docs/operations.md, and this phase. Work in a dedicated branch, follow the prerequisites and acceptance gates, deliver the listed documentation and tests, and STOP before the next phase. Do not invent dataset facts, successful tests, or cloud deployment status.
+## Codex request
+Implement **only Phase 02** using local laptop Docker Compose. Do not use the VPS or Rahti. Provide runnable test evidence, then stop.

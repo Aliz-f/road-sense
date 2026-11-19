@@ -3,7 +3,7 @@
 **Status:** Not started. Documentation only.
 
 ## Goal
-Compute repeatable vibration features on original-time windows.
+Compute repeatable vibration features on original-time windows using **the laptop's Docker Compose stack**.
 
 ## Prerequisites / inputs
 Phase 02 MQTT data, verified sampling rate and axis interpretation.

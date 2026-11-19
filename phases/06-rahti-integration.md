@@ -1,34 +1,35 @@
-# Phase 06 — Rahti and VPS integration
+# Phase 06 — Publish Docker images and deploy across personal VPS + CSC Rahti
 
 **Status:** Not started. Documentation only.
 
 ## Goal
-Move backend to Rahti while feeder/dashboard remain on the VPS; prove cross-environment flow.
+Take the tested **local laptop** application and deploy it into the intended **two remote environments**: personal VPS and Rahti.
 
-## Prerequisites / inputs
-Phase 05 working Compose; CSC project credentials/quotas, approved registry and TLS plan; explicit deployment approval.
+## Inputs
+Passed laptop end-to-end Phase 05; approved Docker registry; personal VPS specs and access; CSC Rahti namespace/quota/credentials; approval for remote changes.
 
-## Detailed instructions for Codex
-1. Inventory Rahti permissions/storage/routes
-2. push pinned images
-3. create Deployment/Service/ConfigMap/Secret template/PVC/Route manifests
-4. validate MQTT TLS passthrough or supported equivalent
-5. keep PostgreSQL internal
-6. move processor, analyzer, API, broker and DB to Rahti
-7. point VPS feeder/dashboard to secure Rahti endpoints
-8. verify recoverability, log evidence, rollback.
+## Instructions
+1. Ensure local Compose integration tests passed and document versioned release images/digests.
+2. Build/push versioned images to approved registry; separate configuration from images.
+3. Inventory, secure and prepare personal VPS with Docker Engine/Compose and restricted MUHOS dataset volume (with owner approval).
+4. Deploy **only** sensor-replay and dashboard to VPS using Docker Compose; keep it initially private/guarded.
+5. Inspect Rahti namespace, quotas, PVC classes and MQTT/TLS/HTTPS Route capabilities.
+6. Deploy Mosquitto, signal-processor, road-analyzer, PostgreSQL/PVC and FastAPI to Rahti with resource limits, probes, private DB and controlled external endpoints.
+7. Point VPS feeder to Rahti broker via authenticated MQTT/TLS; dashboard to Rahti API via HTTPS. Do not expose database publicly.
+8. Run and record full real-data trace VPS CSV → Rahti broker → processor → analyzer → database → API → VPS dashboard.
+9. Test restart, replay duplicate handling, persistence, secure access, recovery and rollback.
 
-## Deliverables / documentation
-infrastructure/rahti manifests and runbook, environment templates, Rahti resource inventory, cross-environment evidence, rollback procedure.
+## Deliverables
+Versioned published images, `infrastructure/vps` and `infrastructure/rahti` deployment instructions/manifests, VPS Compose, settings templates, approved remote configuration, test evidence and rollback guide.
 
-## Acceptance / exit gate
-- [ ] Rahti pods healthy and DB persistent
-- [ ] VPS->Rahti MQTT/TLS and Rahti->VPS API HTTPS functional
-- [ ] full CSV->MQTT->features->events->DB->API->dashboard trace
-- [ ] no secrets publicly exposed.
+## Exit checklist
+- [ ] Whole app passed local Compose tests before promotion.
+- [ ] VPS runs feeder + dashboard, with credentials and data protected.
+- [ ] Rahti runs broker, processor, analyzer, DB and API in healthy Pods.
+- [ ] MQTT/TLS and HTTPS cross-environment connections verified.
+- [ ] Database persists; no secrets/public DB exposure.
+- [ ] Full end-to-end remote flow demonstrated.
+- [ ] Owner approval recorded for remote changes; rollback documented.
 
-## Required phase report
-Codex must record actual commands (without secrets), files created, test commands and results, observed output screenshots/logs, assumptions, unresolved risks and the rollback procedure when relevant. Do not mark complete on unverified claims.
-
-## Copyable Codex request
-Implement **only Phase 06** for RoadSense. First read AGENTS.md, README.md, docs/architecture.md, docs/contracts.md, docs/operations.md, and this phase. Work in a dedicated branch, follow the prerequisites and acceptance gates, deliver the listed documentation and tests, and STOP before the next phase. Do not invent dataset facts, successful tests, or cloud deployment status.
+## Codex request
+Implement **only Phase 06**. Promote my already-tested **laptop** application onto **my own VPS** (sensor feeder + dashboard) and **CSC Rahti** (backend). Require approval before changing remote infrastructure. Test end-to-end and stop before Phase 07.
