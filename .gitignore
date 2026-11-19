@@ -1,0 +1,29 @@
+# Dataset contents (not the docs)
+*.csv
+*.jsonl
+*.parquet
+*.tar
+*.tar.gz
+*.zip
+*.laz
+*.mcap
+data/raw/
+data/processed/
+data/downloads/
+# Credentials and local configuration
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+**/secrets.yaml
+**/secret-values.yaml
+# Generated
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+logs/
+*.log

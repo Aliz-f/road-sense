@@ -1,0 +1,28 @@
+flowchart TB
+  subgraph VPS["VPS / Docker Compose"]
+    DS["MUHOS Bosch IMU CSV\nprivate read-only data directory"]
+    FEED["sensor-replay\nPython + Pandas + MQTT"]
+    UI["dashboard\nStreamlit + Plotly"]
+    DS --> FEED
+  end
+
+  subgraph RAHTI["CSC Rahti / Kubernetes OpenShift"]
+    ROUTEM["MQTT/TLS Route\nauthenticated"]
+    MQ["Mosquitto MQTT Broker"]
+    SP["signal-processor\nPython + NumPy/SciPy"]
+    AN["road-analyzer\nthreshold rules"]
+    PG[("PostgreSQL\nPersistentVolumeClaim")]
+    ROUTEA["HTTPS API Route\nauthenticated"]
+    API["FastAPI REST"]
+    ROUTEM --> MQ
+    MQ -->|"raw topic"| SP
+    SP -->|"publish features topic"| MQ
+    MQ -->|"subscribe features"| AN
+    AN -->|"SQL upsert"| PG
+    PG -->|"SQL query"| API
+    ROUTEA --> API
+  end
+
+  FEED -->|"MQTT/TLS outbound"| ROUTEM
+  UI -->|"HTTPS outbound"| ROUTEA
+  BROWSER["User browser"] -->|"VPN / HTTPS + auth"| UI
