@@ -1,6 +1,8 @@
 # RoadSense — MUHOS Distributed Vehicle Vibration Monitoring
 
-> **PLANNING ONLY** — documentation, phase specifications, and folder guides are present. **No application code, server changes, deployments, or cloud resources have been created.**
+> **LOCAL FOUNDATION ONLY** — Phases 00–01 provide verified data documentation
+> and an isolated Docker Compose preflight. **No application microservice,
+> server change, deployment, or cloud resource has been created.**
 
 RoadSense is a Software Defined Systems final-project design. It replays [MUHOS](https://m3s-kuura.github.io/muhos-dataset/) Bosch IMU measurements to explore vehicle vibration patterns in a distributed system. Vibration alerts are exploratory metrics, **not validated pothole or road-safety detection**.
 
@@ -67,4 +69,5 @@ MVP: replay one verified Bosch IMU CSV recording; compute time-window vibration 
 
 Data source: [MUHOS documentation](https://m3s-kuura.github.io/muhos-dataset/). License, citation, schema, timestamps and units must be verified from actual downloaded files before implementation. Never commit raw archives or credentials.
 
-**Next action:** give Codex the [Phase 00 specification](phases/00-scope-data.md), but only when ready to begin implementation.
+**Next action:** begin [Phase 02](phases/02-replay-mqtt.md) only after reviewing
+the completed Phase 01 report and explicitly selecting that phase.

@@ -1,6 +1,8 @@
 # Phase 01 — Local laptop development foundation
 
-**Status:** Not started. Documentation only.
+**Status:** Completed on 2026-11-19 in branch
+`phase/01-local-foundation`. Phase 02 has not started. Evidence is recorded in
+`docs/local-development.md` and `docs/phase-01-report.md`.
 
 ## Goal
 Prepare a reproducible, safe development environment on the **local laptop**, not on the VPS.
@@ -21,11 +23,15 @@ Phase 00 data profile; laptop OS, CPU/RAM/disk, Docker availability, and consent
 Local setup guide, development environment template, dataset mount instructions, Docker/Compose preflight report, local environment risk checklist.
 
 ## Exit checklist
-- [ ] Laptop Docker and Compose environment verified.
-- [ ] Private data folder and .gitignore behavior verified.
-- [ ] Project can be prepared locally without VPS access.
-- [ ] Local ports are not accidentally publicly exposed.
-- [ ] Commands and rollback/cleanup are documented.
+- [x] Laptop Docker and Compose environment verified.
+- [x] Private data folder and .gitignore behavior verified.
+- [x] Project can be prepared locally without VPS access.
+- [x] Local ports are not accidentally publicly exposed.
+- [x] Commands and rollback/cleanup are documented.
+
+The validation script completed successfully and removed its dedicated
+container/network. No existing container was stopped or changed. No VPS or
+Rahti endpoint was accessed.
 
 ## Codex request
 Implement **only Phase 01** on my **local laptop**. Read AGENTS.md and this phase; set up reproducible local Docker/Compose development and documentation. Do not touch VPS or Rahti and stop before Phase 02.
