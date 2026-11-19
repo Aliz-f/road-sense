@@ -1,0 +1,13 @@
+.git
+.idea
+data/raw
+data/processed
+data/downloads
+config/environments/local/.env
+config/environments/local/.env.*
+config/environments/local/runtime
+**/__pycache__
+**/*.pyc
+.pytest_cache
+.venv
+logs

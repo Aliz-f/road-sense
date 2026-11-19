@@ -1,0 +1,130 @@
+name: roadsense-local
+
+x-sensor-image: &sensor-image
+  image: roadsense/sensor-replay:phase02-local
+  build:
+    context: ../..
+    dockerfile: services/sensor-replay/Dockerfile
+    target: runtime
+
+x-sensor-environment: &sensor-environment
+  env_file:
+    - ../../config/environments/local/.env.phase02
+  volumes:
+    - type: bind
+      source: ${MQTT_RUNTIME_DIR:?run tools/prepare_phase02_local.sh}/ca.crt
+      target: /run/roadsense/mqtt/ca.crt
+      read_only: true
+  networks:
+    - roadsense
+  read_only: true
+  tmpfs:
+    - /tmp:rw,noexec,nosuid,size=8m
+  cap_drop:
+    - ALL
+  security_opt:
+    - no-new-privileges:true
+
+services:
+  mqtt-auth-init:
+    image: eclipse-mosquitto:2.0.22@sha256:81a6193ae693942a3231cd3ac52875b02b7e3a19da671b2fb4b55cc874c5b279
+    user: "${LOCAL_UID:?run tools/prepare_phase02_local.sh}:${LOCAL_GID:?run tools/prepare_phase02_local.sh}"
+    env_file:
+      - ../../config/environments/local/.env.phase02
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - |
+        mosquitto_passwd -b -c /run/roadsense/mqtt/password_file "$$MQTT_USERNAME" "$$MQTT_PASSWORD"
+        printf 'user %s\ntopic readwrite roadsense/v1/imu/raw\ntopic read $$SYS/#\n' "$$MQTT_USERNAME" > /run/roadsense/mqtt/acl_file
+        chmod 600 /run/roadsense/mqtt/password_file /run/roadsense/mqtt/acl_file
+    volumes:
+      - type: bind
+        source: ${MQTT_RUNTIME_DIR:?run tools/prepare_phase02_local.sh}
+        target: /run/roadsense/mqtt
+    network_mode: none
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    restart: "no"
+
+  mqtt-broker:
+    image: eclipse-mosquitto:2.0.22@sha256:81a6193ae693942a3231cd3ac52875b02b7e3a19da671b2fb4b55cc874c5b279
+    user: "${LOCAL_UID}:${LOCAL_GID}"
+    depends_on:
+      mqtt-auth-init:
+        condition: service_completed_successfully
+    env_file:
+      - ../../config/environments/local/.env.phase02
+    volumes:
+      - type: bind
+        source: ./mosquitto/mosquitto.conf
+        target: /mosquitto/config/mosquitto.conf
+        read_only: true
+      - type: bind
+        source: ${MQTT_RUNTIME_DIR}
+        target: /run/roadsense/mqtt
+        read_only: true
+    networks:
+      - roadsense
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=8m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "mosquitto_sub -h localhost -p 8883 --cafile /run/roadsense/mqtt/ca.crt -u \"$${MQTT_USERNAME}\" -P \"$${MQTT_PASSWORD}\" -t '$$SYS/broker/version' -C 1 -W 3 >/dev/null",
+        ]
+      interval: 2s
+      timeout: 4s
+      retries: 15
+      start_period: 2s
+    restart: unless-stopped
+
+  sensor-replay:
+    <<: [*sensor-image, *sensor-environment]
+    depends_on:
+      mqtt-broker:
+        condition: service_healthy
+    volumes:
+      - type: bind
+        source: ${ROADSENSE_DATASET_ROOT:?set the private dataset path}
+        target: /data/archives
+        read_only: true
+      - type: bind
+        source: ${MQTT_RUNTIME_DIR}/ca.crt
+        target: /run/roadsense/mqtt/ca.crt
+        read_only: true
+    restart: "no"
+
+  mqtt-subscriber:
+    <<: [*sensor-image, *sensor-environment]
+    entrypoint: ["python", "-m", "sensor_replay.subscriber"]
+    profiles: ["test"]
+    restart: "no"
+
+  unit-tests:
+    image: roadsense/sensor-replay-test:phase02-local
+    build:
+      context: ../..
+      dockerfile: services/sensor-replay/Dockerfile
+      target: test
+    profiles: ["test"]
+    network_mode: none
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+networks:
+  roadsense:
+    internal: true
