@@ -36,7 +36,10 @@ class MqttSignalProcessor:
         self.client = mqtt.Client(
             callback_api_version=mqtt.CallbackAPIVersion.VERSION2,
             client_id=config.client_id,
-            clean_session=True,
+            # A stable client ID plus a persistent MQTT 3.1.1 session lets the
+            # broker queue QoS 1 raw/control messages while this process is
+            # disconnected. The broker-side persistence is configured too.
+            clean_session=False,
             protocol=mqtt.MQTTv311,
         )
         self.client.username_pw_set(config.mqtt_username, config.mqtt_password)
@@ -52,11 +55,15 @@ class MqttSignalProcessor:
         self.client.on_message = self._on_message
         self._loop_started = False
 
+    def _clear_ready(self) -> None:
+        self.config.ready_file.unlink(missing_ok=True)
+
     def _on_connect(self, client, userdata, flags, reason_code, properties) -> None:
         del userdata, flags, properties
         if reason_code != 0:
             self.connected.clear()
             self.subscribed.clear()
+            self._clear_ready()
             emit("processor_connection_rejected", reason_code=str(reason_code))
             return
         self.connected.set()
@@ -76,6 +83,7 @@ class MqttSignalProcessor:
         del client, userdata, disconnect_flags, properties
         self.connected.clear()
         self.subscribed.clear()
+        self._clear_ready()
         if reason_code != 0 and not self.stop_event.is_set():
             emit("processor_disconnected", reason_code=str(reason_code))
 
@@ -85,6 +93,7 @@ class MqttSignalProcessor:
             emit("processor_subscribe_rejected")
             return
         self.subscribed.set()
+        self.config.ready_file.touch(mode=0o600, exist_ok=True)
         emit(
             "processor_ready",
             raw_topic=self.config.raw_topic,
@@ -118,6 +127,7 @@ class MqttSignalProcessor:
             self.stop_event.set()
 
     def start(self) -> None:
+        self._clear_ready()
         result = self.client.connect(
             self.config.mqtt_host, self.config.mqtt_port, keepalive=30
         )
@@ -182,6 +192,7 @@ class MqttSignalProcessor:
             self._publish(feature)
 
     def close(self) -> None:
+        self._clear_ready()
         try:
             if self.connected.is_set():
                 self.client.disconnect()

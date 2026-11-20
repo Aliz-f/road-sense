@@ -108,6 +108,10 @@ The processor acknowledges a raw or completion message only after validation,
 processing, and any feature publication. Its Paho network callback performs a
 non-blocking insertion into a bounded queue. An unexpected full queue is a
 fatal, non-acknowledged error rather than a blocking callback or silent drop.
+The processor uses a stable client ID and an MQTT 3.1.1 persistent session
+(`clean_session=false`). With broker persistence enabled, QoS 1 raw and
+run-completion messages published while the processor is disconnected are
+queued for recovery; exact redelivery remains safe under the idempotency rules.
 
 ## CAN SPEED gate
 

@@ -46,9 +46,15 @@ class ProcessorConfig:
     connect_timeout_seconds: float
     publish_timeout_seconds: float
     queue_capacity: int
+    ready_file: Path
 
     @classmethod
     def from_environment(cls) -> "ProcessorConfig":
+        client_id = os.getenv(
+            "PROCESSOR_MQTT_CLIENT_ID", "roadsense-signal-processor-local"
+        ).strip()
+        if not client_id or len(client_id.encode("utf-8")) > 128:
+            raise ValueError("PROCESSOR_MQTT_CLIENT_ID must be 1-128 UTF-8 bytes")
         return cls(
             mqtt_host=required("MQTT_HOST"),
             mqtt_port=bounded_integer("MQTT_PORT", 8883, 1, 65535),
@@ -62,9 +68,7 @@ class ProcessorConfig:
             feature_topic=os.getenv(
                 "MQTT_FEATURE_TOPIC", "roadsense/v1/imu/features"
             ),
-            client_id=os.getenv(
-                "PROCESSOR_MQTT_CLIENT_ID", "roadsense-signal-processor-local"
-            ),
+            client_id=client_id,
             connect_timeout_seconds=positive_float(
                 "MQTT_CONNECT_TIMEOUT_SECONDS", 10.0
             ),
@@ -73,5 +77,8 @@ class ProcessorConfig:
             ),
             queue_capacity=bounded_integer(
                 "PROCESSOR_QUEUE_CAPACITY", 1024, 1, 100_000
+            ),
+            ready_file=Path(
+                os.getenv("PROCESSOR_READY_FILE", "/tmp/signal-processor-ready")
             ),
         )

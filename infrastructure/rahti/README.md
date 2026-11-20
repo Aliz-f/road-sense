@@ -5,7 +5,8 @@ OpenShift templates are split into ordered, reversible stages:
 
 1. `core.yaml.tpl`: ConfigMaps, private PostgreSQL Service/Deployment/PVC,
    broker Service/Deployment/PVC and PostgreSQL-only ingress NetworkPolicy.
-2. `migrate.yaml.tpl`: one-off SQL schema migration Job.
+2. `migrate.yaml.tpl`: fresh release-bound SQL migration Job per execution;
+   database advisory locking and checksums make repeats safe.
 3. `apps.yaml.tpl`: Signal Processor, Road Analyzer and read-only FastAPI.
 4. `routes.yaml.tpl`: OPTIONAL external MQTT TLS passthrough and HTTPS API
    Routes with VPS egress allowlist. **Never apply without explicit approval.**
@@ -14,6 +15,8 @@ OpenShift templates are split into ordered, reversible stages:
 ## Deployment constraints
 - Verify Rahti project, quota, storage class, allowed SCC/UID, image pull
   access and real TLS passthrough routes BEFORE running any apply command.
+- Current CSC policy requires the `rahti-custom-seccomp.json` Localhost profile
+  (or an unset field for SCC defaulting); these templates request it explicitly.
 - The candidate `quay.io/sclorg/postgresql-16-c9s` is intended for arbitrary
   OpenShift UIDs, but image, digest and startup behavior MUST be validated
   on the real cluster. Never substitute the local Docker Hub Postgres image blindly.
@@ -22,6 +25,8 @@ OpenShift templates are split into ordered, reversible stages:
 - Client usernames/passwords and TLS keys live in Kubernetes Secrets, generated
   from locally protected files, not Git YAML or a ConfigMap.
 - Only one MQTT processor/analyzer replica for this MVP. Both use stable client IDs.
+- Mosquitto startup is gated by an arbitrary-UID PVC write test; live Rahti
+  restart/persistence behavior remains a required remote check.
 - No public DB Route/port. No API/MQTT external routes in the core stage.
 - The API is read-only at the SQL transaction level but does not yet have a
   separate least-privilege DB role. Remote API route requires a VERIFIED source

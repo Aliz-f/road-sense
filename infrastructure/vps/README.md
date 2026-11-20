@@ -15,8 +15,9 @@ No VPS actions have been taken by this change.
 2. VPS supports Docker Engine and Compose; verify CPU, RAM, disk, OS/architecture.
 3. Copy the private dataset to a restricted path (e.g. `/srv/roadsense/archives`).
 4. Copy a trusted broker CA certificate to `/srv/roadsense/certs/ca.crt`.
-5. Edit ignored `.env` from `.env.example`, `chmod 600 .env`; set actual image digests,
-   MQTT endpoint/credentials, CA path, and approved HTTPS API URL.
+5. Create ignored `.env`, `dashboard.env`, and `sensor-replay.env` from their
+   examples and `chmod 600` all three. Keep API settings out of Sensor Replay
+   and MQTT credentials out of the dashboard.
 6. Confirm approved access method for the dashboard: **SSH tunnel only initially**.
 7. Confirm the MQTT external TCP endpoint and certificate hostname match.
 
@@ -24,7 +25,9 @@ No VPS actions have been taken by this change.
 # ON YOUR VPS, in a private clone of the release repository:
 cd infrastructure/vps
 cp .env.example .env
-chmod 600 .env
+cp dashboard.env.example dashboard.env
+cp sensor-replay.env.example sensor-replay.env
+chmod 600 .env dashboard.env sensor-replay.env
 # Edit .env securely; DO NOT commit, display, or paste it
 docker compose --env-file .env -f compose.yaml config --quiet
 docker compose --env-file .env -f compose.yaml pull

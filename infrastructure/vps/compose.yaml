@@ -6,9 +6,7 @@ services:
   dashboard:
     image: ${DASHBOARD_IMAGE:?set DASHBOARD_IMAGE to a pushed image digest}
     env_file:
-      - .env
-    environment:
-      API_INTERNAL_URL: ${API_INTERNAL_URL:?set approved HTTPS API URL}
+      - dashboard.env
     ports:
       - "127.0.0.1:${DASHBOARD_HOST_PORT:-8501}:8501"
     read_only: true
@@ -29,7 +27,7 @@ services:
     image: ${SENSOR_IMAGE:?set SENSOR_IMAGE to a pushed image digest}
     profiles: ["replay"]
     env_file:
-      - .env
+      - sensor-replay.env
     volumes:
       - type: bind
         source: ${ROADSENSE_DATASET_ROOT:?provide absolute private archive directory}

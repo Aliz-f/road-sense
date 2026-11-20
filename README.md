@@ -73,3 +73,5 @@ Data source: [MUHOS documentation](https://m3s-kuura.github.io/muhos-dataset/). 
 
 **Next action:** review [Phase 06 deployment preparation](docs/phase-06-deployment-guide.md).
 Phase 06 preparation files do not authorize remote access or deployment; VPS/Rahti deployment and acceptance remain pending explicit approval.
+Offline correction evidence and live verification gaps are recorded in the
+[Phase 06 report](docs/phase-06-report.md).

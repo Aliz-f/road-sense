@@ -27,7 +27,7 @@ FastAPI on Rahti OpenShift.
 | Render | `tools/phase06_render_rahti.py` | Replaces image placeholders in non-secret manifests | No |
 | Rahti secrets | `tools/phase06_rahti.sh secrets --execute` | Creates namespace Secrets | **Yes** |
 | Rahti core | `... core --execute` | Creates broker/PostgreSQL and PVCs | **Yes** |
-| Rahti migration | `... migrate --execute` | Applies schema migrations once | **Yes** |
+| Rahti migration | `... migrate --execute` | Creates a fresh release-bound migration Job | **Yes** |
 | Rahti apps | `... apps --execute` | Starts processor, analyzer and API | **Yes** |
 | Rahti routes | `... routes --execute` | OPTIONAL guarded external endpoints | **Yes, public endpoints** |
 | VPS | `docker compose ... up -d dashboard` | Starts VPS dashboard, bound to loopback | **Yes** |
@@ -35,7 +35,7 @@ FastAPI on Rahti OpenShift.
 
 The `oc` command is OpenShift's Kubernetes CLI. A Deployment owns and
 updates application Pods. A Service gives stable cluster-internal DNS.
-A PVC requests persistent storage. A Job runs migrations once. A Secret
+A PVC requests persistent storage. A Job runs one migration execution. A Secret
 provides credentials. A Route can expose a Service outside the cluster.
 `rollout status` waits for a Deployment to be healthy.
 
@@ -45,6 +45,7 @@ provides credentials. A Route can expose a Service outside the cluster.
 python3 -m unittest discover -s tests -p 'test_phase06_preparation.py' -v
 for file in tools/phase06_*.sh; do bash -n "$file"; done
 python3 -m py_compile tools/phase06_render_rahti.py
+python3 -m py_compile tools/phase06_validate_secret_files.py
 ```
 
 These checks verify template rendering, immutable image requirements, and
@@ -84,9 +85,16 @@ oc -n "$RAHTI_NAMESPACE" get routes
 ```
 
 Confirm namespace, project quota, PVC storage class, supported image registry
-pull credentials, non-root security context (restricted SCC), and Route
+pull credentials, non-root security context (`rahti-restricted-v2`), and Route
 passthrough/SSL support. Verify permitted `LoadBalancer` / routing alternatives.
 **Rahti MQTT/TLS external network access is not assumed available.**
+
+Current CSC workload-security documentation says Rahti assigns an arbitrary
+project UID and fsGroup and that the restricted SCC defaults to the local
+`rahti-custom-seccomp.json` profile. The manifests request that exact profile;
+do not replace it with `RuntimeDefault`. Recheck the
+[CSC workload security guide](https://docs.csc.fi/cloud/rahti/configurations/workload-security/)
+immediately before deployment because cluster policy can change.
 
 ## 2. Release immutable container images
 
@@ -142,6 +150,11 @@ and PostgreSQL passwords, and a Mosquitto hashed password file. Inspect
 permissions; keep the directory private, **outside Git**, and back it up
 securely. Never transfer `ca.key` to Rahti or the VPS.
 
+Password files are deliberately newline-free. Kubernetes preserves Secret
+bytes: PostgreSQL receives the same `password` key as an environment value,
+while analyzer/API/migration mount that key as a file and reject embedded line
+breaks. `phase06_validate_secret_files.py` checks this without printing values.
+
 The broker credential username is currently fixed to `roadsense-remote` in
 its ACL/Secret command. Do not change just the Secret username without
 changing the ACL. A more elaborate environment can use separate least-
@@ -162,7 +175,11 @@ Mosquitto 1Gi), resource requests/limits, selectors, ConfigMap values,
 NetworkPolicy, and the mounted credential paths. No passwords are in YAML.
 
 `core.yaml` creates the *internal-only* infrastructure. `migrate.yaml`
-defines the schema-migration Job. `apps.yaml` defines processor/analyzer/API.
+defines a generate-name schema-migration Job tied to the analyzer image digest.
+Each execution creates a fresh Job; PostgreSQL advisory locking and immutable
+migration checksums make concurrent/repeated execution safe. The apps stage
+requires the matching successful migration marker. `apps.yaml` defines
+processor/analyzer/API.
 No public routes are included unless specifically requested below.
 
 If the selected Rahti account uses a particular storage class, check
@@ -208,12 +225,19 @@ For troubleshooting:
 ```sh
 oc -n "$RAHTI_NAMESPACE" get pods,pvc,deployments,jobs
 oc -n "$RAHTI_NAMESPACE" describe pod POD_NAME
-oc -n "$RAHTI_NAMESPACE" logs job/roadsense-migrate-v1
+oc -n "$RAHTI_NAMESPACE" get jobs -l app=roadsense-migrate --sort-by=.metadata.creationTimestamp
+oc -n "$RAHTI_NAMESPACE" logs job/REPLACE_GENERATED_MIGRATION_JOB
 oc -n "$RAHTI_NAMESPACE" logs deployment/road-analyzer --tail=70
 ```
 
-Sanitize logs before sharing. Check actual writable data mounts and verify
-that PostgreSQL and Mosquitto retain state across isolated Pod restarts.
+Sanitize logs before sharing. Mosquitto has an init container that performs a
+create/remove check on `/mosquitto/data` using the same arbitrary UID/fsGroup
+model before the broker starts. This validates permissions but not persistence;
+verify queued QoS 1 messages and `mosquitto.db` survive an isolated Pod restart.
+CSC documents Rahti PVCs as `ReadWriteOnce` and currently uses `standard-csi`;
+confirm the real project before setting a storage class. See
+[CSC persistent storage](https://docs.csc.fi/cloud/rahti/usage/storage/persistent/).
+Check that PostgreSQL retains state too.
 Take backups before intentionally interrupting data or changing storage.
 
 ## 6. Optional cross-environment HTTPS and MQTT routes
@@ -259,7 +283,14 @@ export ROAD_SENSE_PUBLIC_ENDPOINT_APPROVED=yes
 ```
 
 Verify from the VPS using trusted TLS and domain/SNI. Test from an unapproved
-network that neither API nor broker is accessible. The API ingress NetworkPolicy is deliberately fail-closed: it only allows\ntraffic from namespaces labeled `network.openshift.io/policy-group=ingress`.\nConfirm this selector matches Rahti's actual router namespace before applying\nthe Route. If not, adjust policy ONLY after inspecting the cluster topology,\nand do not allow unrestricted API access.\n\nIf IP whitelisting fails,
+network that neither API nor broker is accessible. The API ingress
+NetworkPolicy is deliberately fail-closed: it only allows traffic from
+namespaces labeled `network.openshift.io/policy-group=ingress`. Confirm this
+selector matches Rahti's actual router namespace before applying the Route. If
+not, adjust policy ONLY after inspecting the cluster topology, and do not allow
+unrestricted API access.
+
+If IP whitelisting fails,
 **disable the Route immediately** and switch to a verified private alternative.
 Never disable TLS verification.
 
@@ -272,9 +303,12 @@ Copy ONLY the CA **certificate** (not the CA private key).
 ```sh
 cd infrastructure/vps
 cp .env.example .env
-chmod 600 .env
-# Edit .env with 2 pinned images, real broker DNS + port 443 (if Route),
-# broker username/password and CA path, verified HTTPS API URL, dataset path.
+cp dashboard.env.example dashboard.env
+cp sensor-replay.env.example sensor-replay.env
+chmod 600 .env dashboard.env sensor-replay.env
+# .env has only Compose interpolation (2 pinned images, host paths, port).
+# dashboard.env has only the HTTPS API URL. sensor-replay.env has only replay
+# settings and broker DNS/port/credentials. Never combine these files.
 docker compose --env-file .env -f compose.yaml config --quiet
 docker compose --env-file .env -f compose.yaml pull
 docker compose --env-file .env -f compose.yaml up -d --wait dashboard
@@ -342,10 +376,12 @@ failure tests until a backup and rollback have been confirmed.**
 - [ ] Inspect real VPS and Rahti project/quota/storage/permissions.
 - [ ] Verify every registry image digest including PostgreSQL candidate.
 - [ ] Verify Mosquitto and Postgres run under Rahti restricted SCC + PVCs.
+- [ ] Verify the broker PVC write init check and persistent-session recovery on Rahti.
 - [ ] Agree and test TLS passthrough/secure external access route solution.
 - [ ] Approve and execute registry publish, Rahti deploy and VPS deploy stages.
 - [ ] Verify end-to-end remote telemetry, restart/persistence, backups/rollback.
 - [ ] Record sanitized remote evidence in a Phase 06 implementation report.
 
+Offline correction evidence is recorded in [the Phase 06 report](phase-06-report.md).
 This guide is an educational deployment runbook, **not a claim that remote
 infrastructure is deployed**.

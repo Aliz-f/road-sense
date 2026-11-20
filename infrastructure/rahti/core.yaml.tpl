@@ -29,6 +29,7 @@ data:
   POSTGRES_CONNECT_TIMEOUT_SECONDS: "5"
   POSTGRES_CONNECT_RETRIES: "30"
   ANALYZER_READY_FILE: /tmp/road-analyzer-ready
+  PROCESSOR_READY_FILE: /tmp/signal-processor-ready
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -93,17 +94,18 @@ spec:
           ports:
             - {name: postgres, containerPort: 5432}
           readinessProbe:
-            tcpSocket: {port: postgres}
+            exec:
+              command: ["/bin/sh", "-ec", "pg_isready -U roadsense -d roadsense"]
             initialDelaySeconds: 8
             periodSeconds: 5
           resources:
-            requests: {cpu: 100m, memory: 256Mi}
+            requests: {cpu: 200m, memory: 256Mi}
             limits: {cpu: "1", memory: 1Gi}
           securityContext:
             runAsNonRoot: true
             allowPrivilegeEscalation: false
             capabilities: {drop: [ALL]}
-            seccompProfile: {type: RuntimeDefault}
+            seccompProfile: {type: Localhost, localhostProfile: rahti-custom-seccomp.json}
           volumeMounts:
             - {name: data, mountPath: /var/lib/pgsql/data}
       volumes:
@@ -150,6 +152,24 @@ spec:
     metadata:
       labels: {app: roadsense-mqtt-broker}
     spec:
+      initContainers:
+        - name: verify-mqtt-persistence-writable
+          image: ${BROKER_IMAGE}
+          command:
+            - /bin/sh
+            - -ec
+            - 'probe=/mosquitto/data/.roadsense-write-test-$$; (umask 077 && : > "$probe") && rm -f "$probe"'
+          resources:
+            requests: {cpu: 10m, memory: 16Mi}
+            limits: {cpu: 50m, memory: 32Mi}
+          securityContext:
+            runAsNonRoot: true
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities: {drop: [ALL]}
+            seccompProfile: {type: Localhost, localhostProfile: rahti-custom-seccomp.json}
+          volumeMounts:
+            - {name: data, mountPath: /mosquitto/data}
       containers:
         - name: broker
           image: ${BROKER_IMAGE}
@@ -161,14 +181,14 @@ spec:
             initialDelaySeconds: 3
             periodSeconds: 5
           resources:
-            requests: {cpu: 50m, memory: 96Mi}
+            requests: {cpu: 60m, memory: 96Mi}
             limits: {cpu: 300m, memory: 256Mi}
           securityContext:
             runAsNonRoot: true
             readOnlyRootFilesystem: true
             allowPrivilegeEscalation: false
             capabilities: {drop: [ALL]}
-            seccompProfile: {type: RuntimeDefault}
+            seccompProfile: {type: Localhost, localhostProfile: rahti-custom-seccomp.json}
           volumeMounts:
             - {name: mqtt-runtime, mountPath: /run/roadsense/mqtt, readOnly: true}
             - {name: data, mountPath: /mosquitto/data}

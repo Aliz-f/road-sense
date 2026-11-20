@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
+import ipaddress
 import re
 import sys
 from pathlib import Path
@@ -40,18 +42,28 @@ def render(src: Path, dst: Path, settings: dict[str, str], selected: tuple[str, 
         for name in ("MQTT_PUBLIC_HOST", "API_PUBLIC_HOST"):
             if not HOST_RE.fullmatch(settings[name]) or "." not in settings[name]:
                 raise ValueError(f"{name} must be a fully qualified DNS hostname")
-        if not re.fullmatch(r"(?:\d{1,3}\.){3}\d{1,3}/(?:\d|[12]\d|3[0-2])", settings["VPS_EGRESS_CIDR"]):
+        try:
+            network = ipaddress.ip_network(settings["VPS_EGRESS_CIDR"], strict=True)
+        except ValueError as error:
+            raise ValueError(
+                "VPS_EGRESS_CIDR must be an explicit canonical IPv4 CIDR; verify IP and routing"
+            ) from error
+        if network.version != 4:
             raise ValueError("VPS_EGRESS_CIDR must be an explicit IPv4 CIDR; verify IP and routing")
     else:
         for name in IMAGE_KEYS:
             if not IMAGE_RE.fullmatch(settings[name]):
                 raise ValueError(f"{name} must be an immutable image@sha256:<64hex> reference")
+    render_settings = dict(settings)
+    render_settings["MIGRATION_ID"] = hashlib.sha256(
+        settings.get("ANALYZER_IMAGE", "").encode("utf-8")
+    ).hexdigest()[:12]
     content = src.read_text(encoding="utf-8")
     def replace(match: re.Match[str]) -> str:
         key = match.group(1)
-        if key not in settings or not settings[key]:
+        if key not in render_settings or not render_settings[key]:
             raise ValueError(f"{src.name}: unresolved variable {key}")
-        return settings[key]
+        return render_settings[key]
     result = SUBSTITUTION_RE.sub(replace, content)
     if "REPLACE_" in result:
         raise ValueError(f"{src.name}: unresolved placeholder")

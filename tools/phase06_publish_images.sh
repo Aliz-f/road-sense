@@ -32,4 +32,5 @@ for service in "${services[@]}"; do
   fi
 done
 echo "Pin image digests in infrastructure/rahti/images.env and infrastructure/vps/.env."
+echo "Keep dashboard.env separate from sensor-replay.env; only replay receives MQTT credentials."
 echo "PostgreSQL is a separate OpenShift-compatible upstream image; verify and pin its digest."

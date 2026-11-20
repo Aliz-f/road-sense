@@ -35,3 +35,5 @@ infrastructure/rahti/images.env
 infrastructure/rahti/generated/
 infrastructure/rahti/private/
 infrastructure/vps/.env
+infrastructure/vps/dashboard.env
+infrastructure/vps/sensor-replay.env

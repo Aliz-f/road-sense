@@ -1,4 +1,4 @@
-# Apply only AFTER migration job roadsense-migrate-v1 completes.
+# Apply only AFTER the matching release migration Job completes.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -27,15 +27,20 @@ spec:
           volumeMounts:
             - {name: mqtt-ca, mountPath: /run/roadsense/mqtt, readOnly: true}
             - {name: tmp, mountPath: /tmp}
+          readinessProbe:
+            exec:
+              command: ["python", "-m", "signal_processor.health"]
+            initialDelaySeconds: 5
+            periodSeconds: 10
           resources:
-            requests: {cpu: 50m, memory: 128Mi}
+            requests: {cpu: 100m, memory: 128Mi}
             limits: {cpu: 500m, memory: 512Mi}
           securityContext:
             runAsNonRoot: true
             readOnlyRootFilesystem: true
             allowPrivilegeEscalation: false
             capabilities: {drop: [ALL]}
-            seccompProfile: {type: RuntimeDefault}
+            seccompProfile: {type: Localhost, localhostProfile: rahti-custom-seccomp.json}
       volumes:
         - name: mqtt-ca
           secret:
@@ -80,14 +85,14 @@ spec:
             initialDelaySeconds: 5
             periodSeconds: 10
           resources:
-            requests: {cpu: 50m, memory: 128Mi}
+            requests: {cpu: 100m, memory: 128Mi}
             limits: {cpu: 500m, memory: 512Mi}
           securityContext:
             runAsNonRoot: true
             readOnlyRootFilesystem: true
             allowPrivilegeEscalation: false
             capabilities: {drop: [ALL]}
-            seccompProfile: {type: RuntimeDefault}
+            seccompProfile: {type: Localhost, localhostProfile: rahti-custom-seccomp.json}
       volumes:
         - name: mqtt-ca
           secret:
@@ -134,14 +139,14 @@ spec:
             initialDelaySeconds: 10
             periodSeconds: 20
           resources:
-            requests: {cpu: 50m, memory: 128Mi}
+            requests: {cpu: 100m, memory: 128Mi}
             limits: {cpu: 500m, memory: 512Mi}
           securityContext:
             runAsNonRoot: true
             readOnlyRootFilesystem: true
             allowPrivilegeEscalation: false
             capabilities: {drop: [ALL]}
-            seccompProfile: {type: RuntimeDefault}
+            seccompProfile: {type: Localhost, localhostProfile: rahti-custom-seccomp.json}
       volumes:
         - name: db-auth
           secret:

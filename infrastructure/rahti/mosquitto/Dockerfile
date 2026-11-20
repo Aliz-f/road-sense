@@ -4,5 +4,7 @@ COPY infrastructure/rahti/mosquitto/mosquitto.conf /mosquitto/config/mosquitto.c
 # OpenShift restricted SCC can assign an arbitrary non-root UID, normally group 0.
 USER 0
 RUN chgrp -R 0 /mosquitto && chmod -R g=u /mosquitto
-USER 10001
+# Local image checks use a non-root UID in group 0. Rahti's restricted SCC
+# replaces the UID and supplies its project fsGroup for mounted PVC access.
+USER 10001:0
 EXPOSE 8883
