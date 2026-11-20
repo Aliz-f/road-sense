@@ -61,6 +61,8 @@ metadata:
   name: road-analyzer
 spec:
   replicas: 1
+  strategy:
+    type: Recreate
   selector:
     matchLabels: {app: roadsense-analyzer}
   template:

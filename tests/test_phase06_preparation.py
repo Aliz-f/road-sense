@@ -146,6 +146,29 @@ class Phase06RenderTests(unittest.TestCase):
             self.assertIn("roadsense.io/migration-id:", migrate)
             self.assertNotIn("${MIGRATION_ID}", migrate)
 
+    def test_mqtt_subscriber_deployments_use_recreate(self):
+        with tempfile.TemporaryDirectory() as temp:
+            output = Path(temp) / "apps.yaml"
+            module.render(
+                ROOT / "infrastructure" / "rahti" / "apps.yaml.tpl",
+                output,
+                self.settings(),
+                module.IMAGE_KEYS,
+            )
+            deployments: dict[str, str] = {}
+            for document in output.read_text().split("\n---\n"):
+                if "kind: Deployment" not in document:
+                    continue
+                for name in ("signal-processor", "road-analyzer", "api"):
+                    if f"  name: {name}\n" in document:
+                        deployments[name] = document
+            self.assertEqual(
+                {"signal-processor", "road-analyzer", "api"}, set(deployments)
+            )
+            for name in ("signal-processor", "road-analyzer"):
+                self.assertIn("  replicas: 1\n", deployments[name])
+                self.assertIn("  strategy:\n    type: Recreate\n", deployments[name])
+
     def test_postgres_secret_bytes_match_environment_and_file_consumers(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)

@@ -14,6 +14,9 @@ The correction preserves the Phase 05 payload/database/API behavior and adds:
   validator and regression checks for the environment/file consumers;
 - a stable MQTT 3.1.1 Signal Processor client identity with
   `clean_session=false`, disconnect-aware readiness, and regression tests;
+- single-replica `Recreate` rollout strategies for both MQTT subscriber
+  Deployments, preventing overlapping Pods from sharing their fixed persistent
+  MQTT client identities during an update;
 - Rahti's current explicit `Localhost/rahti-custom-seccomp.json` profile and
   resource request/limit ratios no greater than five;
 - a fresh generate-name migration Job per execution, database advisory
@@ -68,11 +71,12 @@ contain no credentials.
 python3 -m unittest discover -s tests -p 'test_phase06_preparation.py' -v
 ```
 
-Result: PASS, 9 tests. This rendered and structurally checked private manifests
+Result: PASS, 10 tests. This rendered and structurally checked private manifests
 and checked immutable images, API Route/MQTT LoadBalancer separation, CIDR
 inputs, Secret byte consistency, Rahti seccomp and Mosquitto PVC safeguards,
-migration identifiers, processor state persistence, VPS configuration
-separation, and Docker build-context exclusions including `sensor-replay.env`.
+migration identifiers, processor state persistence, both MQTT subscriber
+rollout strategies, VPS configuration separation, and Docker build-context
+exclusions including `sensor-replay.env`.
 
 ```sh
 docker create ... roadsense/signal-processor-test:phase03-local ...
@@ -169,6 +173,49 @@ credentials) were removed afterward. No remote service was contacted.
 The Docker build logs showed filtered contexts (for example, 47.76 kB for the
 Signal Processor and 32.33 kB for Sensor Replay). This is supporting evidence,
 not a substitute for the static exclusion regression above.
+
+## Rollout-strategy follow-up verification
+
+The final deployment-preparation fix added `strategy.type: Recreate` to the
+single-replica `road-analyzer` Deployment. The existing single-replica Signal
+Processor `Recreate` strategy was not changed. A regression test renders
+`apps.yaml.tpl`, locates Deployments by `metadata.name`, and requires both MQTT
+subscribers to retain this configuration.
+
+The current branch reran the following offline checks:
+
+```sh
+python3 -m unittest discover -s tests -p 'test_phase06_preparation.py' -v
+env PYTHONPATH=services/signal-processor/src \
+  python3 -m unittest discover -s services/signal-processor/tests -v
+docker run --rm --network none --entrypoint python ... \
+  roadsense/signal-processor-test:phase03-local \
+  -m unittest discover -s /app/tests -v
+./tools/phase06_preflight.sh local
+docker compose --env-file .env -f compose.yaml config --quiet
+python3 -m py_compile ...
+for file in tools/phase06_*.sh; do bash -n "$file"; done
+git diff --check
+```
+
+Result: PASS for the 10 Phase 06 preparation tests, all 35 Signal Processor
+tests in the cached network-disabled test image, local toolchain preflight, VPS
+Compose expansion from the three example environment files, Python compilation,
+shell syntax, and whitespace checks. A direct host run passed 29 tests but could
+not import the MQTT test module because `paho-mqtt` is not installed on the
+host; no package was installed, and the complete cached-image run passed.
+
+All rendered private manifests parsed as YAML objects with `apiVersion` and
+`kind`, and structural assertions confirmed that both `signal-processor` and
+`road-analyzer` have one replica and `strategy.type: Recreate`. A local
+`kubectl create --dry-run=client --validate=false` could not finish because the
+installed client still attempted API discovery against an unavailable local
+cluster. No Rahti connection was attempted. Server-side dry-run and admission
+remain required live checks.
+
+The branch changes only deployment configuration, project status documentation,
+this report, and the rollout regression test. Application functionality, MQTT
+contracts, database schemas, and API endpoints are unchanged.
 
 ## Required live verification (not performed)
 

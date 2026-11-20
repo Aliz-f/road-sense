@@ -1,6 +1,8 @@
 # Codex instructions — RoadSense
 
-STATUS: PLANNING ONLY. No application code or infrastructure must be created until the user selects an implementation phase.
+STATUS: Phases 00–05 are implemented and tested locally. Phase 06 deployment
+preparation is completed and merged, but actual VPS and CSC Rahti deployment is
+pending. Phase 07 has not started.
 
 1. Read README.md, docs/architecture.md, docs/contracts.md, docs/operations.md, and the selected phases file.
 2. Execute ONE phase at a time. Do not proceed until that phase's acceptance checks pass.
