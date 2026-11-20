@@ -1,7 +1,51 @@
-# VPS infrastructure
+# Phase 06 — VPS (deployment preparation only)
 
-**Status: PLANNED ONLY — no code or deployment exists.**
+This folder will run **only** Sensor Replay (one-shot) and Streamlit (long-running).
+No VPS actions have been taken by this change.
 
-Phase 06 documents secure Docker, dataset directory, SSH, backups, firewall, and dashboard access. No changes yet.
+## What the commands teach
+- `docker compose config --quiet` renders/checks the configuration (do not print secrets).
+- `docker compose pull` downloads immutable published images.
+- `docker compose up -d --wait dashboard` runs Streamlit privately on 127.0.0.1.
+- `docker compose run --rm sensor-replay` replays exactly one source run.
+- `docker compose logs`, `ps` and `down` inspect and stop containers.
 
-See the numbered phase specifications under ../../phases/ and docs/architecture.md.
+## Preconditions
+1. **Explicit owner approval** for any VPS package/install/firewall/SSH/DNS/deployment changes.
+2. VPS supports Docker Engine and Compose; verify CPU, RAM, disk, OS/architecture.
+3. Copy the private dataset to a restricted path (e.g. `/srv/roadsense/archives`).
+4. Copy a trusted broker CA certificate to `/srv/roadsense/certs/ca.crt`.
+5. Edit ignored `.env` from `.env.example`, `chmod 600 .env`; set actual image digests,
+   MQTT endpoint/credentials, CA path, and approved HTTPS API URL.
+6. Confirm approved access method for the dashboard: **SSH tunnel only initially**.
+7. Confirm the MQTT external TCP endpoint and certificate hostname match.
+
+```sh
+# ON YOUR VPS, in a private clone of the release repository:
+cd infrastructure/vps
+cp .env.example .env
+chmod 600 .env
+# Edit .env securely; DO NOT commit, display, or paste it
+docker compose --env-file .env -f compose.yaml config --quiet
+docker compose --env-file .env -f compose.yaml pull
+docker compose --env-file .env -f compose.yaml up -d --wait dashboard
+docker compose --env-file .env -f compose.yaml ps
+docker compose --env-file .env -f compose.yaml run --rm sensor-replay
+docker compose --env-file .env -f compose.yaml logs --tail=50 dashboard
+```
+
+From your laptop, access the VPS dashboard without exposing it publicly:
+
+```sh
+ssh -L 8501:127.0.0.1:8501 USER@VPS_HOST
+# open http://127.0.0.1:8501 locally, in another terminal/browser
+```
+
+## Rollback and safety
+Do not use `down -v`, `docker system prune`, or destructive host commands.
+To roll back, restore the last known-good image digests in `.env` then
+`docker compose --env-file .env -f compose.yaml up -d --wait --no-deps dashboard`.
+`sensor-replay` has no automatic restart and must be run manually with a fresh run_id.
+Keep archives private, read-only in the container, and never commit `.env` or keys.
+
+For deployment ordering and Rahti commands, see `../../docs/phase-06-deployment-guide.md`.

@@ -29,3 +29,9 @@ logs/
 *.log
 .idea/
 config/environments/local/runtime/
+
+# Phase 06 locally rendered deployment files and release environment
+infrastructure/rahti/images.env
+infrastructure/rahti/generated/
+infrastructure/rahti/private/
+infrastructure/vps/.env

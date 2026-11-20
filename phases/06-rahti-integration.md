@@ -1,6 +1,6 @@
 # Phase 06 — Publish Docker images and deploy across personal VPS + CSC Rahti
 
-**Status:** Not started. Documentation only.
+**Status:** Deployment files and learning runbook prepared in `phase/06-deployment-prep`. No remote deployment has been performed; exit checklist is still open.
 
 ## Goal
 Take the tested **local laptop** application and deploy it into the intended **two remote environments**: personal VPS and Rahti.
@@ -18,6 +18,8 @@ Passed laptop end-to-end Phase 05; approved Docker registry; personal VPS specs 
 7. Point VPS feeder to Rahti broker via authenticated MQTT/TLS; dashboard to Rahti API via HTTPS. Do not expose database publicly.
 8. Run and record full real-data trace VPS CSV → Rahti broker → processor → analyzer → database → API → VPS dashboard.
 9. Test restart, replay duplicate handling, persistence, secure access, recovery and rollback.
+
+Deployment preparation and step-by-step commands: [Phase 06 deployment guide](../docs/phase-06-deployment-guide.md).
 
 ## Deliverables
 Versioned published images, `infrastructure/vps` and `infrastructure/rahti` deployment instructions/manifests, VPS Compose, settings templates, approved remote configuration, test evidence and rollback guide.
