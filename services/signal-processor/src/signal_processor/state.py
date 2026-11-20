@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 
 @dataclass(frozen=True, slots=True)
@@ -22,8 +22,11 @@ class JournalRecord:
 class ProcessorState:
     """Durable input journal committed before an MQTT acknowledgement."""
 
-    def __init__(self, path: Path) -> None:
+    def __init__(self, path: Path, rejected_tombstone_limit: int = 1024) -> None:
+        if rejected_tombstone_limit < 1:
+            raise ValueError("rejected_tombstone_limit must be positive")
         self.path = path
+        self.rejected_tombstone_limit = rejected_tombstone_limit
         self.connection = sqlite3.connect(path)
         self.connection.execute("PRAGMA synchronous=FULL")
         self.connection.execute("PRAGMA foreign_keys=ON")
@@ -52,6 +55,16 @@ class ProcessorState:
                 )
                 """
             )
+            self.connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS rejected_tombstones (
+                  tombstone_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  topic TEXT NOT NULL,
+                  payload_sha256 TEXT NOT NULL,
+                  UNIQUE (topic, payload_sha256)
+                )
+                """
+            )
             row = self.connection.execute(
                 "SELECT value FROM processor_metadata WHERE key='schema_version'"
             ).fetchone()
@@ -60,8 +73,36 @@ class ProcessorState:
                     "INSERT INTO processor_metadata (key,value) VALUES ('schema_version',?)",
                     (str(SCHEMA_VERSION),),
                 )
+            elif row[0] == "1":
+                self.connection.execute(
+                    """
+                    INSERT OR IGNORE INTO rejected_tombstones (topic,payload_sha256)
+                    SELECT topic,payload_sha256 FROM input_journal
+                    WHERE status='rejected' ORDER BY record_id
+                    """
+                )
+                self.connection.execute(
+                    "DELETE FROM input_journal WHERE status='rejected'"
+                )
+                self.connection.execute(
+                    "UPDATE processor_metadata SET value=? WHERE key='schema_version'",
+                    (str(SCHEMA_VERSION),),
+                )
             elif row[0] != str(SCHEMA_VERSION):
                 raise ValueError("unsupported processor state schema version")
+            self._trim_rejected_tombstones()
+
+    def _trim_rejected_tombstones(self) -> None:
+        self.connection.execute(
+            """
+            DELETE FROM rejected_tombstones
+            WHERE tombstone_id NOT IN (
+              SELECT tombstone_id FROM rejected_tombstones
+              ORDER BY tombstone_id DESC LIMIT ?
+            )
+            """,
+            (self.rejected_tombstone_limit,),
+        )
 
     @staticmethod
     def _run_id(payload: bytes) -> str | None:
@@ -77,6 +118,15 @@ class ProcessorState:
     def journal(self, topic: str, payload: bytes) -> JournalRecord:
         payload_hash = hashlib.sha256(payload).hexdigest()
         run_id = self._run_id(payload)
+        tombstone = self.connection.execute(
+            """
+            SELECT tombstone_id FROM rejected_tombstones
+            WHERE topic=? AND payload_sha256=?
+            """,
+            (topic, payload_hash),
+        ).fetchone()
+        if tombstone is not None:
+            return JournalRecord(-tombstone[0], topic, payload, "rejected", run_id)
         with self.connection:
             self.connection.execute(
                 """
@@ -116,12 +166,42 @@ class ProcessorState:
         if status not in {"accepted", "rejected"}:
             raise ValueError("invalid processor journal status")
         with self.connection:
-            cursor = self.connection.execute(
-                "UPDATE input_journal SET status=? WHERE record_id=?",
-                (status, record_id),
-            )
+            if status == "rejected":
+                row = self.connection.execute(
+                    """
+                    SELECT topic,payload_sha256 FROM input_journal
+                    WHERE record_id=?
+                    """,
+                    (record_id,),
+                ).fetchone()
+                if row is None:
+                    raise RuntimeError("processor journal record disappeared")
+                self.connection.execute(
+                    """
+                    INSERT OR IGNORE INTO rejected_tombstones
+                      (topic,payload_sha256) VALUES (?,?)
+                    """,
+                    row,
+                )
+                cursor = self.connection.execute(
+                    "DELETE FROM input_journal WHERE record_id=?", (record_id,)
+                )
+                self._trim_rejected_tombstones()
+            else:
+                cursor = self.connection.execute(
+                    "UPDATE input_journal SET status=? WHERE record_id=?",
+                    (status, record_id),
+                )
         if cursor.rowcount != 1:
             raise RuntimeError("processor journal record disappeared")
+
+    def rejected_tombstone_count(self) -> int:
+        row = self.connection.execute(
+            "SELECT COUNT(*) FROM rejected_tombstones"
+        ).fetchone()
+        if row is None:
+            raise RuntimeError("processor rejected tombstone count failed")
+        return row[0]
 
     def prune_completed(self, run_ids: set[str]) -> None:
         if not run_ids:

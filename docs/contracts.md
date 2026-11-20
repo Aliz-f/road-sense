@@ -121,6 +121,18 @@ idempotency key. Completed-run journal records are pruned only after all emitted
 features receive broker QoS 1 acknowledgement. Service shutdown does not
 finalize an open window; a validated run-completion message remains the normal
 finalization mechanism, avoiding a partial/complete feature conflict on restart.
+Readiness is published only while the client is connected, subscribed, and
+initial recovery has completed; these conditions and the readiness file are
+updated under one lock so a disconnect during recovery cannot leave a false
+ready signal. Rejected payloads are removed from the recovery journal and
+represented by at most 1,024 recent topic/SHA-256 tombstones by default. This
+bounds rejected-input storage independently of payload size while suppressing
+recent exact redeliveries. Because broker inflight is limited to one, a rejected
+delivery's tombstone is committed before its acknowledgement and cannot be
+displaced by later deliveries in that crash window. Once acknowledged, an
+evicted older invalid input can only be a later publication; it is safely
+validated and rejected again. Cleanup never removes pending or accepted
+recovery records.
 
 ## CAN SPEED gate
 

@@ -33,7 +33,16 @@ The correction preserves the Phase 05 payload/database/API behavior and adds:
 - a durable SQLite input journal for the Signal Processor. Raw deliveries are
   journaled before processing/acknowledgement and recovered in broker order
   before readiness, while deterministic analyzer upserts absorb republished
-  results after an ambiguous crash.
+  results after an ambiguous crash;
+- lock-protected readiness transitions that require connection, subscription,
+  and completed initial recovery at the same instant, preventing a disconnect
+  during recovery from recreating the readiness file; and
+- schema-v2 bounded rejected-input tombstones. Rejected payload bytes are
+  removed immediately, the newest 1,024 topic/hash pairs are retained for
+  exact-redelivery suppression, and pending/accepted recovery rows are never
+  affected. With broker inflight limited to one, an unacknowledged rejection
+  cannot be evicted before redelivery; existing schema-v1 rejected rows migrate
+  transactionally.
 
 The seccomp and UID/fsGroup choices were checked against the current
 [CSC workload security documentation](https://docs.csc.fi/cloud/rahti/configurations/workload-security/).
@@ -71,12 +80,13 @@ docker cp services/signal-processor/{src,tests} ...
 docker start -a roadsense-phase06-processor-unit
 ```
 
-Result: PASS, 31 tests in a cached test image. This includes persistent-session
+Result: PASS, 35 tests in a cached test image. This includes persistent-session
 construction, resubscription, readiness cleanup, client-ID validation,
-source-time processing, durable journal reopen/deduplication/pruning, crash
-recovery with the original window indices, deliberate non-finalization of
-partial runs at shutdown, duplicate handling, completion, gap and schema
-behavior.
+source-time processing, disconnect-during-recovery readiness exclusion,
+durable journal reopen/deduplication/pruning, bounded rejected tombstones,
+schema-v1 migration, crash recovery with the original window indices,
+deliberate non-finalization of partial runs at shutdown, duplicate handling,
+completion, gap and schema behavior.
 
 ```sh
 for file in tools/phase06_*.sh; do bash -n "$file"; done
@@ -138,6 +148,23 @@ transactional-outbox, credential rotation, repeatable migration, and recovery
 checks. Phase 05 passed its 11 API and 7 dashboard tests plus the complete
 real-MUHOS API/dashboard failure-and-recovery smoke test. The scripts shut down
 their test containers; persistent local test volumes remain by design.
+
+For the readiness/retention follow-up, the affected current suite was rerun:
+
+```sh
+python3 -m py_compile services/signal-processor/src/signal_processor/*.py \
+  services/signal-processor/tests/*.py
+docker start -a roadsense-phase06-review-processor-unit
+./tests/phase03_e2e.sh
+git diff --check
+```
+
+Result: PASS. The disposable unit container ran 35 tests. The Phase 03 Compose
+suite rebuilt the processor, reran the same 35 tests, verified real-data
+features and replay-rate invariance, passed queue-capacity-one backpressure,
+and again passed the active-replay SIGKILL recovery with 19 contiguous feature
+windows. The disposable container and checkout (including copied ignored test
+credentials) were removed afterward. No remote service was contacted.
 
 The Docker build logs showed filtered contexts (for example, 47.76 kB for the
 Signal Processor and 32.33 kB for Sensor Replay). This is supporting evidence,

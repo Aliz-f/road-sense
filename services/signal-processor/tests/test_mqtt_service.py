@@ -130,6 +130,46 @@ class BackpressureTests(unittest.TestCase):
             service._on_disconnect(client, None, None, 1, None)
             self.assertFalse(config.ready_file.exists())
 
+    def test_disconnect_during_recovery_cannot_publish_readiness(self) -> None:
+        config = ProcessorConfig(
+            mqtt_host="mqtt-broker", mqtt_port=8883,
+            mqtt_username="user", mqtt_password="password",
+            mqtt_tls_ca_file=Path("/unused/ca.crt"), raw_topic="raw",
+            run_complete_topic="complete", feature_topic="features",
+            client_id="stable", connect_timeout_seconds=1,
+            publish_timeout_seconds=1, queue_capacity=1,
+            ready_file=Path(self.temp.name) / "recovery-race-ready",
+            state_file=self.state_file("recovery-race"),
+        )
+        client = MagicMock()
+        client.connect.return_value = 0
+        client.subscribe.return_value = (0, 1)
+        with patch("signal_processor.mqtt_service.mqtt.Client", return_value=client):
+            service = MqttSignalProcessor(config, threading.Event())
+            self.services.append(service)
+        service.connected.set()
+        service.subscribed.set()
+
+        def disconnect_while_recovering() -> None:
+            service._on_disconnect(client, None, None, 1, None)
+
+        with patch.object(service, "_recover", side_effect=disconnect_while_recovering):
+            service.start()
+
+        self.assertTrue(service._initial_recovery_complete.is_set())
+        self.assertFalse(service.connected.is_set())
+        self.assertFalse(config.ready_file.exists())
+
+        service._on_connect(client, None, None, 0, None)
+        service._on_subscribe(
+            client,
+            None,
+            1,
+            [SimpleNamespace(is_failure=False)],
+            None,
+        )
+        self.assertTrue(config.ready_file.exists())
+
     def test_crash_recovery_preserves_anchor_window_index_and_samples(self) -> None:
         run_id = str(uuid.uuid4())
 

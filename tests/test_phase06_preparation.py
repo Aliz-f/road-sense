@@ -139,6 +139,7 @@ class Phase06RenderTests(unittest.TestCase):
             self.assertIn("verify-mqtt-persistence-writable", rendered)
             self.assertIn("signal_processor.health", rendered)
             self.assertIn("roadsense-processor-state", rendered)
+            self.assertIn("PROCESSOR_REJECTED_TOMBSTONE_LIMIT", rendered)
             self.assertIn('rahti.csc.fi/local-load-balancer: ""', rendered)
             migrate = (destination / "migrate.yaml").read_text()
             self.assertIn("generateName: roadsense-migrate-", migrate)

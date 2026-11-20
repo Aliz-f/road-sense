@@ -205,6 +205,7 @@ services:
     <<: [*processor-image, *processor-environment]
     environment:
       PROCESSOR_QUEUE_CAPACITY: ${PROCESSOR_QUEUE_CAPACITY:-1024}
+      PROCESSOR_REJECTED_TOMBSTONE_LIMIT: ${PROCESSOR_REJECTED_TOMBSTONE_LIMIT:-1024}
     depends_on:
       mqtt-broker:
         condition: service_healthy

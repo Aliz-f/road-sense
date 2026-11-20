@@ -28,12 +28,21 @@ class ProcessorConfigTests(unittest.TestCase):
         values = self.environment()
         values["PROCESSOR_READY_FILE"] = "/tmp/custom-processor-ready"
         values["PROCESSOR_STATE_FILE"] = "/tmp/custom-processor-state.sqlite3"
+        values["PROCESSOR_REJECTED_TOMBSTONE_LIMIT"] = "64"
         with patch.dict(os.environ, values, clear=True):
             config = ProcessorConfig.from_environment()
         self.assertEqual(str(config.ready_file), "/tmp/custom-processor-ready")
         self.assertEqual(
             str(config.state_file), "/tmp/custom-processor-state.sqlite3"
         )
+        self.assertEqual(config.rejected_tombstone_limit, 64)
+
+    def test_rejected_tombstone_limit_is_bounded(self) -> None:
+        values = self.environment()
+        values["PROCESSOR_REJECTED_TOMBSTONE_LIMIT"] = "0"
+        with patch.dict(os.environ, values, clear=True):
+            with self.assertRaisesRegex(ValueError, "between 1 and 100000"):
+                ProcessorConfig.from_environment()
 
 
 if __name__ == "__main__":

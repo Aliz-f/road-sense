@@ -31,6 +31,11 @@ The processor:
 - commits exact input payloads to a synchronous SQLite journal before MQTT
   acknowledgement, replays active runs before readiness after restart, and
   prunes completed journals after QoS 1 feature publication;
+- updates readiness atomically from connection, subscription, and completed
+  recovery state, so a disconnect during journal replay cannot report ready;
+- stores rejected inputs as a configurable bounded set of recent hash
+  tombstones (default 1,024), without retaining rejected payloads or pruning
+  active recovery records;
 - never finalizes an open window merely because the service is stopping; this
   prevents a restart from producing conflicting partial and complete windows;
 - anchors windows to the first accepted source timestamp for each `run_id`, so

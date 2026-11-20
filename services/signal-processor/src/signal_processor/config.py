@@ -48,6 +48,7 @@ class ProcessorConfig:
     queue_capacity: int
     ready_file: Path
     state_file: Path
+    rejected_tombstone_limit: int = 1024
 
     @classmethod
     def from_environment(cls) -> "ProcessorConfig":
@@ -87,5 +88,8 @@ class ProcessorConfig:
                     "PROCESSOR_STATE_FILE",
                     "/var/lib/roadsense-processor/processor-state.sqlite3",
                 )
+            ),
+            rejected_tombstone_limit=bounded_integer(
+                "PROCESSOR_REJECTED_TOMBSTONE_LIMIT", 1024, 1, 100_000
             ),
         )
