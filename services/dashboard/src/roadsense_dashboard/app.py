@@ -44,7 +44,11 @@ def main() -> None:
     }
     selected_label = st.selectbox("Recording", list(session_by_label))
     selected_session = session_by_label[selected_label]
-    runs = client.runs(selected_session["session_id"])
+    try:
+        runs = client.runs(selected_session["session_id"])
+    except (requests.RequestException, ValueError, KeyError) as error:
+        st.error(f"Could not load runs for the selected recording: {error}")
+        return
     if not runs:
         st.info("This recording has no observed processing runs.")
         return

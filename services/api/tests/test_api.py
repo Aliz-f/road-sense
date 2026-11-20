@@ -112,8 +112,40 @@ class ConfigTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             password_file = Path(directory) / "password"
             password_file.write_text("private-value\n", encoding="utf-8")
-            config = ApiConfig("db", 5432, "roadsense", "reader", password_file, 5)
-            self.assertEqual(config.connection_kwargs()["password"], "private-value")
+            config = ApiConfig(
+                "db", 5432, "roadsense", "reader", password_file, None, 5
+            )
+            self.assertEqual(config.password_candidates(), ("private-value",))
+            self.assertEqual(
+                config.connection_kwargs("private-value")["password"], "private-value"
+            )
+
+    def test_password_files_are_reread_and_fallback_is_deduplicated(self):
+        with tempfile.TemporaryDirectory() as directory:
+            current = Path(directory) / "password"
+            previous = Path(directory) / "password.previous"
+            current.write_text("old-password\n", encoding="utf-8")
+            previous.write_text("future-password\n", encoding="utf-8")
+            config = ApiConfig(
+                "db", 5432, "roadsense", "reader", current, previous, 5
+            )
+            self.assertEqual(
+                config.password_candidates(), ("old-password", "future-password")
+            )
+            current.write_text("future-password\n", encoding="utf-8")
+            self.assertEqual(config.password_candidates(), ("future-password",))
+
+    def test_password_file_must_contain_exactly_one_nonempty_line(self):
+        with tempfile.TemporaryDirectory() as directory:
+            password_file = Path(directory) / "password"
+            config = ApiConfig(
+                "db", 5432, "roadsense", "reader", password_file, None, 5
+            )
+            for content in ("", "first\nsecond\n"):
+                password_file.write_text(content, encoding="utf-8")
+                with self.subTest(content=content):
+                    with self.assertRaisesRegex(ValueError, "one non-empty line"):
+                        config.password_candidates()
 
     def test_invalid_port_is_rejected(self):
         original = os.environ.get("POSTGRES_PORT")

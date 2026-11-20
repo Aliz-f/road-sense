@@ -187,6 +187,11 @@ return 422; a valid unknown run returns 404. Response models reject unexpected
 fields and validate UUIDs, timestamps, non-negative metrics, enumerations, and
 counts. Queries are fixed, parameterized, and executed in read-only database
 transactions; the API exposes no arbitrary SQL or mutation endpoint.
+Feature and event totals on the runs page are calculated independently for
+each run, so neither count is multiplied by the other relation. Connections
+reread the current PostgreSQL password file and may use the staged
+`password.previous` only as an interrupted-rotation fallback, consistent with
+the Phase 04 analyzer.
 
 ## Required design checks
 

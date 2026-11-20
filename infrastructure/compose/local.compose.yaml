@@ -423,6 +423,31 @@ services:
     security_opt:
       - no-new-privileges:true
 
+  api-credential-rotation-helper:
+    image: roadsense/api-test:phase05-local
+    build:
+      context: ../..
+      dockerfile: services/api/Dockerfile
+      target: test
+    entrypoint: ["python", "tests/credential_rotation_helper.py"]
+    user: "${LOCAL_UID:?run tools/prepare_phase02_local.sh}:${LOCAL_GID:?run tools/prepare_phase02_local.sh}"
+    env_file:
+      - ../../config/environments/local/.env.phase02
+    volumes:
+      - type: bind
+        source: ../../config/environments/local/runtime/postgres
+        target: /run/roadsense/postgres
+    networks:
+      - roadsense
+    profiles: ["test"]
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
   dashboard-smoke-tests:
     image: roadsense/dashboard-test:phase05-local
     build:

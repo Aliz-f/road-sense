@@ -12,6 +12,7 @@ class ApiConfig:
     postgres_db: str
     postgres_user: str
     postgres_password_file: Path
+    postgres_previous_password_file: Path | None
     connect_timeout_seconds: int
 
     @classmethod
@@ -30,13 +31,37 @@ class ApiConfig:
             postgres_password_file=Path(
                 os.environ.get("POSTGRES_PASSWORD_FILE", "/run/roadsense/postgres/password")
             ),
+            postgres_previous_password_file=Path(
+                os.environ.get(
+                    "POSTGRES_PREVIOUS_PASSWORD_FILE",
+                    "/run/roadsense/postgres/password.previous",
+                )
+            ),
             connect_timeout_seconds=timeout,
         )
 
-    def connection_kwargs(self) -> dict[str, object]:
-        password = self.postgres_password_file.read_text(encoding="utf-8").strip()
-        if not password:
-            raise ValueError("PostgreSQL password file is empty")
+    def password_candidates(self) -> tuple[str, ...]:
+        candidates = [self._read_password_file(self.postgres_password_file)]
+        previous = self.postgres_previous_password_file
+        if previous is not None and previous.is_file():
+            previous_password = self._read_password_file(previous)
+            if previous_password not in candidates:
+                candidates.append(previous_password)
+        return tuple(candidates)
+
+    @staticmethod
+    def _read_password_file(path: Path) -> str:
+        try:
+            password = path.read_text(encoding="utf-8").rstrip("\r\n")
+        except OSError as error:
+            raise ValueError(f"cannot read PostgreSQL password file: {path}") from error
+        if not password or "\n" in password or "\r" in password:
+            raise ValueError(
+                f"PostgreSQL password file must contain one non-empty line: {path}"
+            )
+        return password
+
+    def connection_kwargs(self, password: str) -> dict[str, object]:
         return {
             "host": self.postgres_host,
             "port": self.postgres_port,

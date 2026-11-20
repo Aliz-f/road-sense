@@ -5,8 +5,11 @@
 The read-only typed API exposes liveness/readiness, sessions, runs, features,
 events, and aggregate status. Collection endpoints use bounded limit/offset
 pagination. Queries are fixed, parameterized, and read-only; PostgreSQL remains
-private. The local OpenAPI UI is `http://127.0.0.1:8000/docs` while the stack is
-running.
+private. Run counts use independent indexed feature/event subqueries rather
+than a feature-by-event join. Database connections reread the ignored current
+password file and fall back to `password.previous` during an interrupted Phase
+04 credential rotation. The local OpenAPI UI is
+`http://127.0.0.1:8000/docs` while the stack is running.
 
 Run its containerized unit suite with:
 

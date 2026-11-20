@@ -17,7 +17,21 @@ class ApiStore:
 
     @contextmanager
     def connection(self) -> Iterator[psycopg.Connection]:
-        with psycopg.connect(**self.config.connection_kwargs(), row_factory=dict_row) as connection:
+        connection = None
+        last_error: psycopg.OperationalError | None = None
+        for password in self.config.password_candidates():
+            try:
+                connection = psycopg.connect(
+                    **self.config.connection_kwargs(password), row_factory=dict_row
+                )
+                break
+            except psycopg.OperationalError as error:
+                last_error = error
+        if connection is None:
+            raise psycopg.OperationalError(
+                "none of the configured PostgreSQL password files authenticated"
+            ) from last_error
+        with connection:
             connection.execute("SET TRANSACTION READ ONLY")
             yield connection
 
@@ -55,14 +69,14 @@ class ApiStore:
             f"""
             SELECT r.run_id, r.session_id, r.sensor_id, r.algorithm_version,
                    r.replay_rate, r.source_start, r.source_end, r.status,
-                   count(DISTINCT f.feature_window_id)::integer AS feature_count,
-                   count(DISTINCT e.event_id)::integer AS event_count,
+                   (SELECT count(*)::integer FROM feature_windows f
+                    WHERE f.run_id=r.run_id) AS feature_count,
+                   (SELECT count(*)::integer FROM events e
+                    WHERE e.run_id=r.run_id) AS event_count,
                    r.created_at, r.updated_at
             FROM runs r
-            LEFT JOIN feature_windows f ON f.run_id=r.run_id
-            LEFT JOIN events e ON e.run_id=r.run_id
             {where}
-            GROUP BY r.run_id ORDER BY r.created_at DESC, r.run_id LIMIT %s OFFSET %s
+            ORDER BY r.created_at DESC, r.run_id LIMIT %s OFFSET %s
             """,
             f"SELECT count(*)::integer AS total FROM runs r {where}",
             params, limit, offset,

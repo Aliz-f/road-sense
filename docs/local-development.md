@@ -141,8 +141,8 @@ explicitly, while PostgreSQL is available, with:
 ```
 
 No password value is printed. If rotation is interrupted, retain the ignored
-`password.previous` fallback and rerun the command; analyzer reconnects accept
-either staged credential.
+`password.previous` fallback and rerun the command; analyzer reconnects and
+FastAPI database requests accept either staged credential until promotion.
 
 ## Troubleshooting and risk checklist
 

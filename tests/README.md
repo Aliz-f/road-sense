@@ -41,12 +41,15 @@ recreation. Routine cleanup intentionally does not delete that volume.
 See `../docs/phase-04-report.md` for the threshold rationale, actual output,
 and rollback procedure.
 
-`phase05_e2e.sh` runs seven API unit/config tests, four dashboard client/chart/UI
-smoke tests, starts the complete local stack, replays 1,536 real Bumpy-gravel
-samples, independently recomputes the 19 expected feature windows, checks the
-five expected event windows, renders the three Plotly traces through the
-dashboard API client, verifies HTTP health/UI responses, and asserts that only
-the API and dashboard are loopback-published.
+`phase05_e2e.sh` runs eleven API/config/store tests and seven dashboard
+client/chart/UI tests, including successful Streamlit selection, statistics,
+Plotly, and event rendering. It stages an interrupted PostgreSQL credential
+rotation and proves API fallback/recovery, then starts the complete local
+stack and replays 1,536 rows from each of two real recordings (Bumpy gravel and
+Paved road 60kmh). It independently recomputes both sets of 19 feature
+windows, checks their respective five and zero event results, renders each run
+through the dashboard API client, verifies API-outage behavior and HTTP health,
+and asserts that only the API and dashboard are loopback-published.
 
 ```sh
 ./tests/phase05_e2e.sh

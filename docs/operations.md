@@ -32,7 +32,9 @@ The ignored PostgreSQL password file remains stable under
 
 Rotation stages a fallback before changing the role and verifies the new login
 before promotion. If interrupted, retain `password.previous` and rerun the
-command after PostgreSQL is available; analyzer reconnects try both files.
+command after PostgreSQL is available; analyzer reconnects and new API
+requests try both files. Both services reread the files, so a recovered
+rotation does not require rebuilding an image.
 
 ## Step 2 — Package and publish
 - Build versioned/pinned images from the *same source* tested locally.
