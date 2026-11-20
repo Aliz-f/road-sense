@@ -160,3 +160,22 @@ spec:
   selector: {app: roadsense-api}
   ports:
     - {name: http, port: 8000, targetPort: http}
+
+---
+# Fail closed against direct cross-project access to the unauthenticated API.
+# VERIFY Rahti router namespaces carry this label before using an external Route.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: roadsense-api-ingress
+spec:
+  podSelector:
+    matchLabels: {app: roadsense-api}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              network.openshift.io/policy-group: ingress
+      ports:
+        - {protocol: TCP, port: 8000}

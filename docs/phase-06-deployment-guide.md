@@ -43,12 +43,12 @@ provides credentials. A Route can expose a Service outside the cluster.
 
 ```sh
 python3 -m unittest discover -s tests -p 'test_phase06_preparation.py' -v
-bash -n tools/phase06_*.sh
+for file in tools/phase06_*.sh; do bash -n "$file"; done
 python3 -m py_compile tools/phase06_render_rahti.py
 ```
 
-These verify template rendering, immutable image requirements, and safe
-placeholder handling. They do not prove that live Rahti accepts the resources.
+These checks verify template rendering, immutable image requirements, and
+safe placeholder handling. They do not prove that live Rahti accepts the resources.
 
 ## 1. Inspect prerequisites without making changes
 
@@ -259,7 +259,7 @@ export ROAD_SENSE_PUBLIC_ENDPOINT_APPROVED=yes
 ```
 
 Verify from the VPS using trusted TLS and domain/SNI. Test from an unapproved
-network that neither API nor broker is accessible. If IP whitelisting fails,
+network that neither API nor broker is accessible. The API ingress NetworkPolicy is deliberately fail-closed: it only allows\ntraffic from namespaces labeled `network.openshift.io/policy-group=ingress`.\nConfirm this selector matches Rahti's actual router namespace before applying\nthe Route. If not, adjust policy ONLY after inspecting the cluster topology,\nand do not allow unrestricted API access.\n\nIf IP whitelisting fails,
 **disable the Route immediately** and switch to a verified private alternative.
 Never disable TLS verification.
 
