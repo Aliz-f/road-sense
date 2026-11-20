@@ -11,6 +11,7 @@ import paho.mqtt.client as mqtt
 from .config import ProcessorConfig
 from .events import emit, emit_error
 from .processor import SignalEngine
+from .state import JournalRecord, ProcessorState
 
 
 @dataclass(frozen=True, slots=True)
@@ -26,6 +27,7 @@ class MqttSignalProcessor:
         self.config = config
         self.stop_event = stop_event
         self.engine = SignalEngine()
+        self.state = ProcessorState(config.state_file)
         self.messages: queue.Queue[QueuedMessage] = queue.Queue(
             maxsize=config.queue_capacity
         )
@@ -54,6 +56,7 @@ class MqttSignalProcessor:
         self.client.on_subscribe = self._on_subscribe
         self.client.on_message = self._on_message
         self._loop_started = False
+        self._initial_recovery_complete = threading.Event()
 
     def _clear_ready(self) -> None:
         self.config.ready_file.unlink(missing_ok=True)
@@ -93,7 +96,8 @@ class MqttSignalProcessor:
             emit("processor_subscribe_rejected")
             return
         self.subscribed.set()
-        self.config.ready_file.touch(mode=0o600, exist_ok=True)
+        if self._initial_recovery_complete.is_set():
+            self.config.ready_file.touch(mode=0o600, exist_ok=True)
         emit(
             "processor_ready",
             raw_topic=self.config.raw_topic,
@@ -137,6 +141,9 @@ class MqttSignalProcessor:
         self._loop_started = True
         if not self.subscribed.wait(self.config.connect_timeout_seconds):
             raise TimeoutError("timed out waiting for MQTT subscription")
+        self._recover()
+        self._initial_recovery_complete.set()
+        self.config.ready_file.touch(mode=0o600, exist_ok=True)
 
     def _publish(self, feature: dict[str, object]) -> None:
         if not self.connected.wait(self.config.publish_timeout_seconds):
@@ -160,21 +167,56 @@ class MqttSignalProcessor:
             quality_flags=feature["quality_flags"],
         )
 
+    def _process_record(self, record: JournalRecord) -> list[dict[str, object]]:
+        if record.topic == self.config.raw_topic:
+            return self.engine.process_message(record.payload)
+        if record.topic == self.config.run_complete_topic:
+            return self.engine.complete_run(record.payload)
+        raise ValueError(f"unexpected MQTT topic: {record.topic}")
+
+    def _recover(self) -> None:
+        records = self.state.recoverable()
+        for record in records:
+            try:
+                features = self._process_record(record)
+                for feature in features:
+                    self._publish(feature)
+            except ValueError as error:
+                self.state.set_status(record.record_id, "rejected")
+                emit_error(
+                    "processor_recovery_record_rejected",
+                    error,
+                    record_id=record.record_id,
+                )
+                continue
+            self.state.set_status(record.record_id, "accepted")
+        self.state.prune_completed(self.engine.completed_run_ids())
+        emit("processor_state_recovered", journal_records=len(records))
+
     def _handle(self, message: QueuedMessage) -> None:
-        event = "mqtt_message_rejected"
+        record = self.state.journal(message.topic, message.payload)
+        if record.status == "rejected":
+            result = self.client.ack(message.message_id, message.qos)
+            if result != mqtt.MQTT_ERR_SUCCESS:
+                raise ConnectionError(
+                    f"MQTT message acknowledgement returned {result}"
+                )
+            return
+        event = (
+            "raw_message_rejected"
+            if message.topic == self.config.raw_topic
+            else "run_complete_rejected"
+        )
         try:
-            if message.topic == self.config.raw_topic:
-                features = self.engine.process_message(message.payload)
-                event = "raw_message_rejected"
-            elif message.topic == self.config.run_complete_topic:
-                features = self.engine.complete_run(message.payload)
-                event = "run_complete_rejected"
-            else:
-                raise ValueError(f"unexpected MQTT topic: {message.topic}")
+            features = self._process_record(record)
             for feature in features:
                 self._publish(feature)
         except ValueError as error:
+            self.state.set_status(record.record_id, "rejected")
             emit_error(event, error, message_id=message.message_id)
+        else:
+            self.state.set_status(record.record_id, "accepted")
+            self.state.prune_completed(self.engine.completed_run_ids())
         result = self.client.ack(message.message_id, message.qos)
         if result != mqtt.MQTT_ERR_SUCCESS:
             raise ConnectionError(f"MQTT message acknowledgement returned {result}")
@@ -188,8 +230,9 @@ class MqttSignalProcessor:
             self._handle(message)
         if self.fatal_error is not None:
             raise self.fatal_error
-        for feature in self.engine.finalize_all():
-            self._publish(feature)
+        # Do not finalize open windows on service shutdown. Their acknowledged
+        # input is durably journaled and must resume after restart; emitting an
+        # incomplete feature here could conflict with the later complete one.
 
     def close(self) -> None:
         self._clear_ready()
@@ -202,3 +245,4 @@ class MqttSignalProcessor:
                 self._loop_started = False
             self.connected.clear()
             self.subscribed.clear()
+            self.state.close()

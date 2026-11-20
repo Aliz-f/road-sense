@@ -8,13 +8,14 @@ OpenShift templates are split into ordered, reversible stages:
 2. `migrate.yaml.tpl`: fresh release-bound SQL migration Job per execution;
    database advisory locking and checksums make repeats safe.
 3. `apps.yaml.tpl`: Signal Processor, Road Analyzer and read-only FastAPI.
-4. `routes.yaml.tpl`: OPTIONAL external MQTT TLS passthrough and HTTPS API
-   Routes with VPS egress allowlist. **Never apply without explicit approval.**
-5. `mosquitto/Dockerfile`: broker image adapted for OpenShift's assigned UID.
+4. `routes.yaml.tpl`: OPTIONAL HTTPS API Route with VPS egress allowlist.
+5. `mqtt-external.yaml.tpl`: OPTIONAL raw-TCP MQTT LoadBalancer Service and
+   NetworkPolicy. CSC Service Desk approval for a project ingress IP is required.
+6. `mosquitto/Dockerfile`: broker image adapted for OpenShift's assigned UID.
 
 ## Deployment constraints
 - Verify Rahti project, quota, storage class, allowed SCC/UID, image pull
-  access and real TLS passthrough routes BEFORE running any apply command.
+  access, and an approved LoadBalancer ingress IP BEFORE external MQTT.
 - Current CSC policy requires the `rahti-custom-seccomp.json` Localhost profile
   (or an unset field for SCC defaulting); these templates request it explicitly.
 - The candidate `quay.io/sclorg/postgresql-16-c9s` is intended for arbitrary
@@ -25,14 +26,16 @@ OpenShift templates are split into ordered, reversible stages:
 - Client usernames/passwords and TLS keys live in Kubernetes Secrets, generated
   from locally protected files, not Git YAML or a ConfigMap.
 - Only one MQTT processor/analyzer replica for this MVP. Both use stable client IDs.
+- The processor journals input on its own RWO PVC before MQTT acknowledgement;
+  a restart replays active runs before readiness and completed journals are pruned.
 - Mosquitto startup is gated by an arbitrary-UID PVC write test; live Rahti
   restart/persistence behavior remains a required remote check.
-- No public DB Route/port. No API/MQTT external routes in the core stage.
+- No public DB Route/port. No external API/MQTT resource in the core stage.
 - The API is read-only at the SQL transaction level but does not yet have a
   separate least-privilege DB role. Remote API route requires a VERIFIED source
   allowlist and guarded access before exposing it.
-- Route TCP TLS passthrough is a DEPLOYMENT GATE, not assumed to work. Use
-  broker hostname with SNI and port 443 if the cluster supports passthrough.
+- CSC documents Routes as HTTP(S)-only. Raw MQTT/TLS uses only a separately
+  approved LoadBalancer Service on port 30883; never create an MQTT Route.
 
 ## Example execution (ONLY after owner approves the remote stage)
 ```sh
@@ -55,8 +58,8 @@ export ROAD_SENSE_APPROVED=yes
 ./tools/phase06_rahti.sh apps --execute
 ./tools/phase06_rahti.sh status --execute
 
-# External route stage only with a separate approval after private validation.
-# See docs guide for route rendering and security checks.
+# Add API_PUBLIC_HOST and VPS_EGRESS_CIDR, then use --include-external only
+# after reviewing the API Route and CSC-approved MQTT LoadBalancer plan.
 ```
 
 ## Rollback

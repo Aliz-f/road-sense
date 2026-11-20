@@ -19,7 +19,9 @@ No VPS actions have been taken by this change.
    examples and `chmod 600` all three. Keep API settings out of Sensor Replay
    and MQTT credentials out of the dashboard.
 6. Confirm approved access method for the dashboard: **SSH tunnel only initially**.
-7. Confirm the MQTT external TCP endpoint and certificate hostname match.
+7. Confirm CSC assigned the Rahti LoadBalancer ingress IP and that its DNS,
+   certificate hostname, and external port `30883` match. Do not use a Route
+   for raw MQTT.
 
 ```sh
 # ON YOUR VPS, in a private clone of the release repository:

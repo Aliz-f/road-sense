@@ -10,8 +10,10 @@ import sys
 from pathlib import Path
 
 IMAGE_KEYS = ("BROKER_IMAGE", "PROCESSOR_IMAGE", "ANALYZER_IMAGE", "API_IMAGE", "POSTGRES_IMAGE")
-ROUTE_KEYS = ("MQTT_PUBLIC_HOST", "API_PUBLIC_HOST", "VPS_EGRESS_CIDR")
-TEMPLATES = ("core", "migrate", "apps", "routes")
+API_ROUTE_KEYS = ("API_PUBLIC_HOST", "VPS_EGRESS_CIDR")
+MQTT_EXTERNAL_KEYS = ("VPS_EGRESS_CIDR",)
+SETTING_KEYS = IMAGE_KEYS + API_ROUTE_KEYS
+PRIVATE_TEMPLATES = ("core", "migrate", "apps")
 IMAGE_RE = re.compile(r"^[a-zA-Z0-9._:/-]+@sha256:[a-f0-9]{64}$")
 HOST_RE = re.compile(r"^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$")
 SUBSTITUTION_RE = re.compile(r"\$\{([A-Z0-9_]+)\}")
@@ -28,7 +30,7 @@ def load_settings(path: Path) -> dict[str, str]:
         name, value = line.split("=", 1)
         if name in values:
             raise ValueError(f"duplicate setting {name}")
-        if name not in IMAGE_KEYS + ROUTE_KEYS:
+        if name not in SETTING_KEYS:
             raise ValueError(f"unsupported setting {name}; no secrets are permitted")
         values[name] = value.strip()
     return values
@@ -38,8 +40,9 @@ def render(src: Path, dst: Path, settings: dict[str, str], selected: tuple[str, 
     for key in selected:
         if not settings.get(key):
             raise ValueError(f"required setting {key} is missing")
-    if selected == ROUTE_KEYS:
-        for name in ("MQTT_PUBLIC_HOST", "API_PUBLIC_HOST"):
+    if selected in (API_ROUTE_KEYS, MQTT_EXTERNAL_KEYS):
+        if "API_PUBLIC_HOST" in selected:
+            name = "API_PUBLIC_HOST"
             if not HOST_RE.fullmatch(settings[name]) or "." not in settings[name]:
                 raise ValueError(f"{name} must be a fully qualified DNS hostname")
         try:
@@ -74,14 +77,23 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--settings", required=True, type=Path, help="non-secret images.env with pinned digests")
     parser.add_argument("--output-dir", required=True, type=Path, help="local destination (ignored if inside infrastructure/rahti/generated)")
-    parser.add_argument("--include-routes", action="store_true", help="render guarded external routes; still does NOT apply")
+    parser.add_argument(
+        "--include-external",
+        action="store_true",
+        help="render guarded API Route and MQTT LoadBalancer; still does NOT apply",
+    )
     args = parser.parse_args()
     settings = load_settings(args.settings)
     source = Path(__file__).resolve().parents[1] / "infrastructure" / "rahti"
-    names = TEMPLATES if args.include_routes else TEMPLATES[:-1]
     args.output_dir.mkdir(parents=True, exist_ok=True)
-    for name in names:
-        required = ROUTE_KEYS if name == "routes" else IMAGE_KEYS
+    templates: list[tuple[str, tuple[str, ...]]] = [
+        (name, IMAGE_KEYS) for name in PRIVATE_TEMPLATES
+    ]
+    if args.include_external:
+        templates.extend(
+            (("routes", API_ROUTE_KEYS), ("mqtt-external", MQTT_EXTERNAL_KEYS))
+        )
+    for name, required in templates:
         render(source / f"{name}.yaml.tpl", args.output_dir / f"{name}.yaml", settings, required)
         print(f"rendered non-secret manifest: {args.output_dir / f'{name}.yaml'}")
     print("No remote changes performed. Review YAML before approval/deployment.")

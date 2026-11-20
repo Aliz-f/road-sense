@@ -47,6 +47,7 @@ class ProcessorConfig:
     publish_timeout_seconds: float
     queue_capacity: int
     ready_file: Path
+    state_file: Path
 
     @classmethod
     def from_environment(cls) -> "ProcessorConfig":
@@ -80,5 +81,11 @@ class ProcessorConfig:
             ),
             ready_file=Path(
                 os.getenv("PROCESSOR_READY_FILE", "/tmp/signal-processor-ready")
+            ),
+            state_file=Path(
+                os.getenv(
+                    "PROCESSOR_STATE_FILE",
+                    "/var/lib/roadsense-processor/processor-state.sqlite3",
+                )
             ),
         )

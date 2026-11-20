@@ -28,6 +28,11 @@ The processor:
   fails closed on an unexpected overflow;
 - uses a stable client ID with `clean_session=false`, so a persistent broker
   queues QoS 1 raw/control messages during processor disconnections;
+- commits exact input payloads to a synchronous SQLite journal before MQTT
+  acknowledgement, replays active runs before readiness after restart, and
+  prunes completed journals after QoS 1 feature publication;
+- never finalizes an open window merely because the service is stopping; this
+  prevents a restart from producing conflicting partial and complete windows;
 - anchors windows to the first accepted source timestamp for each `run_id`, so
   replay speed and wall-clock delivery timing do not affect features.
 
@@ -47,5 +52,5 @@ docker compose --env-file config/environments/local/.env.phase02 \
 
 See `../../docs/phase-03-report.md` for exact tests and observed results.
 Phase 03 is local-only; no VPS or Rahti deployment is included.
-Phase 06 adds only persistent-session recovery/readiness configuration; it does
-not alter source-time feature calculations or payload contracts.
+Phase 06 adds persistent-session plus journal recovery/readiness; it does not
+alter source-time feature calculations or payload contracts.

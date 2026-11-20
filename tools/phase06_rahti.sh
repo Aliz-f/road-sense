@@ -3,8 +3,8 @@
 set -euo pipefail
 stage="${1:-}"
 mode="${2:-}"
-case "$stage" in secrets|core|migrate|apps|routes|status) ;; *)
-  echo "Usage: $0 secrets|core|migrate|apps|routes|status --execute" >&2; exit 2;;
+case "$stage" in secrets|core|migrate|apps|routes|mqtt-external|status) ;; *)
+  echo "Usage: $0 secrets|core|migrate|apps|routes|mqtt-external|status --execute" >&2; exit 2;;
 esac
 : "${RAHTI_NAMESPACE:?set explicit target Rahti project name}"
 command -v oc >/dev/null || { echo "oc CLI not installed" >&2; exit 1; }
@@ -49,8 +49,12 @@ if [[ "$stage" == status ]]; then
   exit 0
 fi
 [[ -s "$out/$stage.yaml" ]] || { echo "missing rendered manifest $out/$stage.yaml" >&2; exit 2; }
-if [[ "$stage" == routes && ${ROAD_SENSE_PUBLIC_ENDPOINT_APPROVED:-} != yes ]]; then
+if [[ ( "$stage" == routes || "$stage" == mqtt-external ) && ${ROAD_SENSE_PUBLIC_ENDPOINT_APPROVED:-} != yes ]]; then
   echo "Public route exposure requires separate ROAD_SENSE_PUBLIC_ENDPOINT_APPROVED=yes" >&2
+  exit 2
+fi
+if [[ "$stage" == mqtt-external && ${RAHTI_MQTT_LOADBALANCER_APPROVED:-} != yes ]]; then
+  echo "MQTT requires a CSC-approved project LoadBalancer ingress IP" >&2
   exit 2
 fi
 if [[ "$stage" == core ]]; then
@@ -89,10 +93,15 @@ elif [[ "$stage" == apps ]]; then
   oc_ns rollout status deployment/signal-processor --timeout=180s
   oc_ns rollout status deployment/road-analyzer --timeout=180s
   oc_ns rollout status deployment/api --timeout=180s
-else
-  echo "WARNING: exposing routes; manually verify source-IP allowlist, TLS and external access."
+elif [[ "$stage" == routes ]]; then
+  echo "WARNING: exposing the HTTPS API Route; verify allowlist and TLS."
   oc_ns apply --dry-run=server -f "$out/routes.yaml" >/dev/null
   oc_ns apply -f "$out/routes.yaml"
   oc_ns get routes
+else
+  echo "WARNING: exposing raw MQTT/TLS through a CSC-approved LoadBalancer IP."
+  oc_ns apply --dry-run=server -f "$out/mqtt-external.yaml" >/dev/null
+  oc_ns apply -f "$out/mqtt-external.yaml"
+  oc_ns get service mqtt-broker-external
 fi
 echo "Phase 06 Rahti stage $stage: resources submitted. Verify actual service functionality."

@@ -247,3 +247,6 @@ class SignalEngine:
         for run_id in sorted(self.runs):
             features.extend(self.runs[run_id].finalize())
         return features
+
+    def completed_run_ids(self) -> set[str]:
+        return {run_id for run_id, run in self.runs.items() if run.completed}

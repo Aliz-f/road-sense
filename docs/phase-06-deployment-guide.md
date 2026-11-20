@@ -10,7 +10,7 @@ TLS Mosquitto, one Signal Processor, one Road Analyzer, PostgreSQL/PVC, and
 FastAPI on Rahti OpenShift.
 
 > Safety gate: Do NOT run publish, apply, secret generation on target, VPS
-> changes, external Routes, firewall/SSH/DNS edits, or incur costs until their
+> changes, external endpoints, firewall/SSH/DNS edits, or incur costs until their
 > specific changes are reviewed and explicitly approved. Scripts default to
 > plan-only where applicable. No secrets or raw MUHOS archives may be committed.
 
@@ -29,7 +29,8 @@ FastAPI on Rahti OpenShift.
 | Rahti core | `... core --execute` | Creates broker/PostgreSQL and PVCs | **Yes** |
 | Rahti migration | `... migrate --execute` | Creates a fresh release-bound migration Job | **Yes** |
 | Rahti apps | `... apps --execute` | Starts processor, analyzer and API | **Yes** |
-| Rahti routes | `... routes --execute` | OPTIONAL guarded external endpoints | **Yes, public endpoints** |
+| Rahti API Route | `... routes --execute` | OPTIONAL guarded HTTPS API | **Yes, public endpoint** |
+| Rahti MQTT LoadBalancer | `... mqtt-external --execute` | OPTIONAL approved raw-TCP MQTT/TLS | **Yes, public endpoint** |
 | VPS | `docker compose ... up -d dashboard` | Starts VPS dashboard, bound to loopback | **Yes** |
 | Replay | `docker compose ... run --rm sensor-replay` | Sends MUHOS recording from VPS | **Yes, data delivery** |
 
@@ -37,6 +38,7 @@ The `oc` command is OpenShift's Kubernetes CLI. A Deployment owns and
 updates application Pods. A Service gives stable cluster-internal DNS.
 A PVC requests persistent storage. A Job runs one migration execution. A Secret
 provides credentials. A Route can expose a Service outside the cluster.
+An approved LoadBalancer Service provides the raw TCP endpoint Routes cannot.
 `rollout status` waits for a Deployment to be healthy.
 
 ### Preparation unit checks (no server access)
@@ -85,9 +87,10 @@ oc -n "$RAHTI_NAMESPACE" get routes
 ```
 
 Confirm namespace, project quota, PVC storage class, supported image registry
-pull credentials, non-root security context (`rahti-restricted-v2`), and Route
-passthrough/SSL support. Verify permitted `LoadBalancer` / routing alternatives.
-**Rahti MQTT/TLS external network access is not assumed available.**
+pull credentials, non-root security context (`rahti-restricted-v2`), HTTPS
+Route support, and whether CSC Service Desk has assigned this project a
+LoadBalancer ingress IP. **Rahti MQTT/TLS external access is unavailable until
+that separate approval exists.**
 
 Current CSC workload-security documentation says Rahti assigns an arbitrary
 project UID and fsGroup and that the restricted SCC defaults to the local
@@ -136,11 +139,11 @@ migrations work before claiming readiness.
 ## 3. Create local secrets, never store them in Git
 
 This example creates a private demonstration CA and broker cert with SANs for
-`mqtt-broker` and the approved external MQTT route hostname. This is NOT
+`mqtt-broker` and the DNS name mapped to the approved LoadBalancer IP. This is NOT
 a public-trust CA. The VPS must trust the generated `ca.crt`.
 
 ```sh
-# On a trusted laptop, AFTER choosing the actual approved MQTT route hostname:
+# On a trusted laptop, AFTER choosing the actual approved MQTT DNS hostname:
 ./tools/phase06_prepare_secrets.sh --local-only \
   mqtt.REPLACE_APPROVED_HOST /private/roadsense-phase06-secrets
 ```
@@ -171,7 +174,7 @@ python3 tools/phase06_render_rahti.py \
 ```
 
 Review rendered YAML: image digests, PVC sizes (default Postgres 5Gi,
-Mosquitto 1Gi), resource requests/limits, selectors, ConfigMap values,
+Mosquitto 1Gi, processor state 1Gi), resource requests/limits, selectors, ConfigMap values,
 NetworkPolicy, and the mounted credential paths. No passwords are in YAML.
 
 `core.yaml` creates the *internal-only* infrastructure. `migrate.yaml`
@@ -179,8 +182,9 @@ defines a generate-name schema-migration Job tied to the analyzer image digest.
 Each execution creates a fresh Job; PostgreSQL advisory locking and immutable
 migration checksums make concurrent/repeated execution safe. The apps stage
 requires the matching successful migration marker. `apps.yaml` defines
-processor/analyzer/API.
-No public routes are included unless specifically requested below.
+processor/analyzer/API. The processor uses a Recreate strategy and its own RWO
+PVC because acknowledged active-run input must survive Pod replacement.
+No public resource is included unless specifically requested below.
 
 If the selected Rahti account uses a particular storage class, check
 `oc get storageclass` and configure it explicitly after review. If a
@@ -238,43 +242,52 @@ CSC documents Rahti PVCs as `ReadWriteOnce` and currently uses `standard-csi`;
 confirm the real project before setting a storage class. See
 [CSC persistent storage](https://docs.csc.fi/cloud/rahti/usage/storage/persistent/).
 Check that PostgreSQL retains state too.
+The Signal Processor must not become ready until its journal has replayed.
+During an approved restart test, interrupt an active replay after at least one
+acknowledged batch, replace the processor Pod, and verify the next feature keeps
+the original `source_start`, `window_index`, and sample count. The processor
+PVC contains source-derived payloads and must be protected/backed up accordingly.
 Take backups before intentionally interrupting data or changing storage.
 
-## 6. Optional cross-environment HTTPS and MQTT routes
+## 6. Optional external HTTPS API and raw-TCP MQTT
 
-**DO NOT treat this as an automatic step**. Before publishing any Route,
-inspect Rahti's current ingress documentation and test supported endpoints
-against your actual project.
+**DO NOT treat this as an automatic step.** CSC documents OpenShift Routes as
+HTTP/HTTPS only; a TLS-passthrough Route is therefore not a supported raw-MQTT
+transport. RoadSense uses two different, separately approved mechanisms:
 
-- MQTT: requires **TCP/TLS passthrough with SNI**; OpenShift HTTPS Routes
-  generally use external port **443**, even when the internal Service is 8883.
-  The certificate needs the external hostname in SAN. Confirm your Rahti
-  router actually supports this MQTT passthrough behavior and a verified
-  source-IP allowlist, or choose an explicitly approved alternative.
-- FastAPI: example edge-terminated HTTPS Route. Since the application has no
-  login, allow requests **only from the approved VPS source IP** (or use a
-  verified VPN/authenticated gateway). Test unauthorized traffic is rejected.
-- Both routes default to a source allowlist annotation. Its enforcement and
-  actual VPS egress IP **must be verified**. Do not assume annotations alone
-  provide sufficient security. PostgreSQL NEVER gets a public Route.
+- FastAPI: an edge-terminated HTTPS Route restricted to the verified VPS
+  source IP. The application has no login, so replace this with an approved
+  authenticated/private gateway if the allowlist cannot be proven.
+- MQTT: a `LoadBalancer` Service on external TCP port `30883`, forwarding to
+  broker port `8883`. CSC Service Desk must first approve a project ingress IP.
+  The manifest sets `allocateLoadBalancerNodePorts: false` because Rahti does
+  not provide NodePorts, uses the documented 30000–35000 port range, and sets
+  `externalTrafficPolicy: Local` plus the documented broker node selector so
+  the VPS source IP remains usable by NetworkPolicy.
 
-Add real, reviewed values to the ignored `images.env`:
+See [CSC LoadBalancer Service documentation](https://docs.csc.fi/cloud/rahti/configurations/loadbalancer-service/).
+Do not apply `mqtt-external.yaml` until the actual project has an assigned IP,
+the broker Pod can schedule on a `rahti.csc.fi/local-load-balancer` node, and
+the effect on project quota/cost has been approved. MQTT still requires its
+own TLS certificate and strong authentication; IP filtering is only a second
+layer. PostgreSQL never receives a public endpoint.
+
+Add reviewed non-secret values to the ignored `images.env`:
 
 ```dotenv
-MQTT_PUBLIC_HOST=mqtt.REPLACE_APPROVED_HOST
 API_PUBLIC_HOST=api.REPLACE_APPROVED_HOST
 VPS_EGRESS_CIDR=REPLACE_VPS_PUBLIC_IP/32
 ```
 
-Render routes locally:
+Render both optional external manifests locally:
 
 ```sh
 python3 tools/phase06_render_rahti.py \
   --settings infrastructure/rahti/images.env \
-  --output-dir infrastructure/rahti/generated --include-routes
+  --output-dir infrastructure/rahti/generated --include-external
 ```
 
-Only **after a separate explicit approval for exposing both endpoints**:
+After separate owner approval, the API Route can be applied independently:
 
 ```sh
 export ROAD_SENSE_APPROVED=yes
@@ -282,17 +295,24 @@ export ROAD_SENSE_PUBLIC_ENDPOINT_APPROVED=yes
 ./tools/phase06_rahti.sh routes --execute
 ```
 
-Verify from the VPS using trusted TLS and domain/SNI. Test from an unapproved
-network that neither API nor broker is accessible. The API ingress
-NetworkPolicy is deliberately fail-closed: it only allows traffic from
-namespaces labeled `network.openshift.io/policy-group=ingress`. Confirm this
-selector matches Rahti's actual router namespace before applying the Route. If
-not, adjust policy ONLY after inspecting the cluster topology, and do not allow
-unrestricted API access.
+Only after CSC has approved/assigned the LoadBalancer ingress IP and the owner
+has separately approved exposure:
 
-If IP whitelisting fails,
-**disable the Route immediately** and switch to a verified private alternative.
-Never disable TLS verification.
+```sh
+export ROAD_SENSE_APPROVED=yes
+export ROAD_SENSE_PUBLIC_ENDPOINT_APPROVED=yes
+export RAHTI_MQTT_LOADBALANCER_APPROVED=yes
+./tools/phase06_rahti.sh mqtt-external --execute
+```
+
+Create/verify a DNS A record for the assigned public IP, include that name in
+the broker certificate SAN, and configure the VPS for that hostname and port
+`30883`. Verify authenticated TLS from the VPS, denied access from an
+unapproved network, Service endpoints, source-IP filtering, and broker logs.
+The API NetworkPolicy uses CSC's documented router namespace label
+`policy-group.network.openshift.io/ingress`. Recheck it on the actual cluster.
+If either allowlist fails, remove the affected external resource and use an
+approved private alternative. Never disable TLS verification.
 
 ## 7. Prepare VPS Compose without public dashboard
 
@@ -308,7 +328,8 @@ cp sensor-replay.env.example sensor-replay.env
 chmod 600 .env dashboard.env sensor-replay.env
 # .env has only Compose interpolation (2 pinned images, host paths, port).
 # dashboard.env has only the HTTPS API URL. sensor-replay.env has only replay
-# settings and broker DNS/port/credentials. Never combine these files.
+# settings and the approved LoadBalancer DNS/port 30883/credentials. Never
+# combine these files.
 docker compose --env-file .env -f compose.yaml config --quiet
 docker compose --env-file .env -f compose.yaml pull
 docker compose --env-file .env -f compose.yaml up -d --wait dashboard
@@ -366,18 +387,20 @@ failure tests until a backup and rollback have been confirmed.**
   image digests before changing them.
 - **Database:** never assume a migration is reversible. Use a tested backup
   and restore plan; never delete PVCs to roll back code.
-- **Routes:** withdraw unapproved or insecure public Routes promptly, without
-  deleting database/broker storage.
+- **Processor:** preserve its state PVC across rollbacks. A compatible image
+  must replay the journal before readiness; do not delete it during an active run.
+- **External access:** withdraw an unapproved/insecure API Route or MQTT
+  LoadBalancer Service promptly without deleting database/broker/state storage.
 - **Secrets:** never print credentials, commit .env files, or paste tokens.
 
 ## 10. Work remaining before Phase 06 can be called complete
 
-- [ ] Verify Phase 05 local tests on final merged commit.
+- [x] Verify Phase 02–05 local tests on the corrected branch commit.
 - [ ] Inspect real VPS and Rahti project/quota/storage/permissions.
 - [ ] Verify every registry image digest including PostgreSQL candidate.
 - [ ] Verify Mosquitto and Postgres run under Rahti restricted SCC + PVCs.
 - [ ] Verify the broker PVC write init check and persistent-session recovery on Rahti.
-- [ ] Agree and test TLS passthrough/secure external access route solution.
+- [ ] Obtain CSC LoadBalancer approval and test MQTT/TLS on port 30883.
 - [ ] Approve and execute registry publish, Rahti deploy and VPS deploy stages.
 - [ ] Verify end-to-end remote telemetry, restart/persistence, backups/rollback.
 - [ ] Record sanitized remote evidence in a Phase 06 implementation report.

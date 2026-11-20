@@ -27,9 +27,13 @@ class ProcessorConfigTests(unittest.TestCase):
     def test_readiness_file_can_be_configured_for_container_probe(self) -> None:
         values = self.environment()
         values["PROCESSOR_READY_FILE"] = "/tmp/custom-processor-ready"
+        values["PROCESSOR_STATE_FILE"] = "/tmp/custom-processor-state.sqlite3"
         with patch.dict(os.environ, values, clear=True):
             config = ProcessorConfig.from_environment()
         self.assertEqual(str(config.ready_file), "/tmp/custom-processor-ready")
+        self.assertEqual(
+            str(config.state_file), "/tmp/custom-processor-state.sqlite3"
+        )
 
 
 if __name__ == "__main__":

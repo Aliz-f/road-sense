@@ -8,7 +8,10 @@ unpaced_log=$(mktemp)
 paced_log=$(mktemp)
 full_log=$(mktemp)
 replay_log=$(mktemp)
+recovery_log=$(mktemp)
+recovery_replay_log=$(mktemp)
 subscriber_pid=
+replay_pid=
 
 compose() {
   docker compose --env-file "$env_file" -f "$compose_file" "$@"
@@ -19,8 +22,13 @@ cleanup() {
     kill "$subscriber_pid" >/dev/null 2>&1 || true
     wait "$subscriber_pid" >/dev/null 2>&1 || true
   fi
+  if test -n "$replay_pid"; then
+    kill "$replay_pid" >/dev/null 2>&1 || true
+    wait "$replay_pid" >/dev/null 2>&1 || true
+  fi
   compose down --remove-orphans >/dev/null 2>&1 || true
-  rm -f "$unpaced_log" "$paced_log" "$full_log" "$replay_log"
+  rm -f "$unpaced_log" "$paced_log" "$full_log" "$replay_log" \
+    "$recovery_log" "$recovery_replay_log"
 }
 trap cleanup EXIT HUP INT TERM
 
@@ -132,6 +140,54 @@ if compose logs signal-processor 2>&1 | grep -q 'processor_queue_overflow'; then
 fi
 test "$(compose ps --status running --quiet signal-processor)" = "$processor_id"
 printf '%s\n' 'Phase 03 queue-capacity=1 broker backpressure stress: PASS'
+
+recovery_run_id=44444444-4444-4444-8444-444444444444
+compose run --rm --no-deps -T \
+  -e EXPECTED_RUN_ID="$recovery_run_id" \
+  -e EXPECTED_FEATURES=19 \
+  -e SUBSCRIBER_INCLUDE_FEATURES=true \
+  -e SUBSCRIBER_TIMEOUT_SECONDS=90 \
+  feature-subscriber >"$recovery_log" 2>&1 &
+subscriber_pid=$!
+wait_for_subscriber "$recovery_log"
+compose run --rm --no-deps -T \
+  -e RUN_ID="$recovery_run_id" -e REPLAY_RATE=1 \
+  -e MAX_SAMPLES=1536 -e BATCH_SIZE=64 \
+  sensor-replay >"$recovery_replay_log" 2>&1 &
+replay_pid=$!
+
+published_before_crash=false
+for _ in $(seq 1 200); do
+  if compose logs signal-processor 2>/dev/null \
+    | grep "$recovery_run_id" | grep -q '"event":"feature_published"'; then
+    published_before_crash=true
+    break
+  fi
+  sleep 0.1
+done
+if test "$published_before_crash" != true; then
+  compose logs signal-processor >&2
+  printf '%s\n' 'processor did not publish before crash test timeout' >&2
+  exit 1
+fi
+
+docker kill --signal KILL "$(compose ps --quiet signal-processor)" >/dev/null
+compose up --detach --wait signal-processor >/dev/null
+wait "$replay_pid"
+replay_pid=
+if ! wait "$subscriber_pid"; then
+  subscriber_pid=
+  cat "$recovery_log" >&2
+  cat "$recovery_replay_log" >&2
+  compose logs signal-processor >&2
+  exit 1
+fi
+subscriber_pid=
+grep -q '"feature_count":19' "$recovery_log"
+grep -q '"first_window_index":0' "$recovery_log"
+grep -q '"last_window_index":18' "$recovery_log"
+compose logs signal-processor 2>&1 | grep -Eq '"journal_records":[1-9][0-9]*'
+printf '%s\n' 'Phase 06 processor active-replay crash recovery: PASS'
 
 if test "${PHASE03_FULL_REPLAY:-false}" = true; then
   full_run_id=33333333-3333-4333-8333-333333333333

@@ -18,7 +18,8 @@ Streamlit at `http://127.0.0.1:8501`. Only those two ports are published, both
 on loopback. MQTT and PostgreSQL remain unpublished. The dashboard calls the
 API over Docker HTTP and never connects directly to MQTT or PostgreSQL.
 
-Phases 04–05 use named PostgreSQL and Mosquitto volumes. Routine teardown must not
+Phases 04–05 use named PostgreSQL and Mosquitto volumes. Phase 06 adds a named
+Signal Processor journal volume for crash recovery. Routine teardown must not
 include `--volumes`. Mosquitto persists durable subscriptions/queued QoS 1
 messages; PostgreSQL uses an authenticated SQL health check and the analyzer
 retries temporary connection failures.
@@ -50,7 +51,8 @@ rotation does not require rebuilding an image.
 ## Step 4 — Rahti deployment
 - Verify namespace, quotas, image registry, storage class, TLS/Routes, and credentials.
 - Run broker, processor, analyzer, PostgreSQL with PVC and API using OpenShift/Kubernetes.
-- Authenticate MQTT clients; restrict topics; validate MQTT TLS passthrough/alternative supported endpoint.
+- Authenticate MQTT clients and restrict topics. Rahti Routes are HTTP(S)-only;
+  request and validate a CSC-approved LoadBalancer ingress IP for raw MQTT/TLS.
 - Keep PostgreSQL an internal Service; expose API only over guarded HTTPS; protect all Secrets.
 - Test the remote pipeline VPS feeder → Rahti processing/database/API → VPS dashboard.
 

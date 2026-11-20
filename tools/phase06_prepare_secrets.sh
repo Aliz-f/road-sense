@@ -2,7 +2,7 @@
 # Generates development/demo TLS and credentials LOCALLY only; never creates Rahti Secrets.
 set -euo pipefail
 if [[ ${1:-} != "--local-only" || $# != 3 ]]; then
-  echo "Usage: $0 --local-only MQTT_PUBLIC_HOST PRIVATE_OUTPUT_DIR" >&2
+  echo "Usage: $0 --local-only MQTT_PUBLIC_DNS_HOST PRIVATE_OUTPUT_DIR" >&2
   exit 2
 fi
 host=$2

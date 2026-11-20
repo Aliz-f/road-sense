@@ -112,6 +112,15 @@ The processor uses a stable client ID and an MQTT 3.1.1 persistent session
 (`clean_session=false`). With broker persistence enabled, QoS 1 raw and
 run-completion messages published while the processor is disconnected are
 queued for recovery; exact redelivery remains safe under the idempotency rules.
+Before acknowledging either input topic, the processor commits the exact
+topic/payload to a synchronous SQLite journal. On restart it replays all active
+run records in original arrival order before readiness, reconstructing anchors,
+sequence/sample duplicate caches, flags, and the open window. Features produced
+during recovery may be republished and are collapsed downstream by the feature
+idempotency key. Completed-run journal records are pruned only after all emitted
+features receive broker QoS 1 acknowledgement. Service shutdown does not
+finalize an open window; a validated run-completion message remains the normal
+finalization mechanism, avoiding a partial/complete feature conflict on restart.
 
 ## CAN SPEED gate
 

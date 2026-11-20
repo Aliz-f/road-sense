@@ -70,10 +70,9 @@ class Phase06RenderTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "unsupported setting"):
                 module.load_settings(values)
 
-    def test_routes_require_hostnames_and_allowlist(self):
+    def test_api_route_and_mqtt_loadbalancer_are_separate_and_guarded(self):
         with tempfile.TemporaryDirectory() as temp:
             options = self.settings() | {
-                "MQTT_PUBLIC_HOST": "mqtt.example.org",
                 "API_PUBLIC_HOST": "api.example.org",
                 "VPS_EGRESS_CIDR": "198.51.100.5/32",
             }
@@ -82,23 +81,36 @@ class Phase06RenderTests(unittest.TestCase):
                 ROOT / "infrastructure" / "rahti" / "routes.yaml.tpl",
                 output,
                 options,
-                module.ROUTE_KEYS,
+                module.API_ROUTE_KEYS,
             )
             content = output.read_text()
-            self.assertIn("passthrough", content)
+            self.assertNotIn("roadsense-mqtt", content)
+            self.assertNotIn("passthrough", content)
             self.assertIn("198.51.100.5/32", content)
+            mqtt_output = Path(temp) / "mqtt-external.yaml"
+            module.render(
+                ROOT / "infrastructure" / "rahti" / "mqtt-external.yaml.tpl",
+                mqtt_output,
+                options,
+                module.MQTT_EXTERNAL_KEYS,
+            )
+            mqtt = mqtt_output.read_text()
+            self.assertIn("type: LoadBalancer", mqtt)
+            self.assertIn("allocateLoadBalancerNodePorts: false", mqtt)
+            self.assertIn("externalTrafficPolicy: Local", mqtt)
+            self.assertIn("port: 30883", mqtt)
+            self.assertNotIn("kind: Route", mqtt)
             options["VPS_EGRESS_CIDR"] = ""
             with self.assertRaisesRegex(ValueError, "required"):
                 module.render(
                     ROOT / "infrastructure" / "rahti" / "routes.yaml.tpl",
                     output,
                     options,
-                    module.ROUTE_KEYS,
+                    module.API_ROUTE_KEYS,
                 )
 
     def test_cidr_rejects_invalid_octets_and_noncanonical_network(self):
         options = self.settings() | {
-            "MQTT_PUBLIC_HOST": "mqtt.example.org",
             "API_PUBLIC_HOST": "api.example.org",
             "VPS_EGRESS_CIDR": "999.51.100.5/32",
         }
@@ -108,7 +120,7 @@ class Phase06RenderTests(unittest.TestCase):
                     ROOT / "infrastructure" / "rahti" / "routes.yaml.tpl",
                     Path(temp) / "routes.yaml",
                     options,
-                    module.ROUTE_KEYS,
+                    module.API_ROUTE_KEYS,
                 )
 
     def test_rahti_security_persistence_and_migration_controls_are_rendered(self):
@@ -126,6 +138,8 @@ class Phase06RenderTests(unittest.TestCase):
             self.assertIn("rahti-custom-seccomp.json", rendered)
             self.assertIn("verify-mqtt-persistence-writable", rendered)
             self.assertIn("signal_processor.health", rendered)
+            self.assertIn("roadsense-processor-state", rendered)
+            self.assertIn('rahti.csc.fi/local-load-balancer: ""', rendered)
             migrate = (destination / "migrate.yaml").read_text()
             self.assertIn("generateName: roadsense-migrate-", migrate)
             self.assertIn("roadsense.io/migration-id:", migrate)
@@ -161,8 +175,19 @@ class Phase06RenderTests(unittest.TestCase):
 
     def test_docker_build_context_excludes_sensitive_material(self):
         patterns = (ROOT / ".dockerignore").read_text()
-        for pattern in ("**/.env", "**/*-password", "**/password_file", "**/*.key", "**/*.tar"):
+        for pattern in (
+            "**/.env",
+            "**/*.env",
+            "**/*.env.*",
+            "**/*-password",
+            "**/password_file",
+            "**/*.key",
+            "**/*.tar",
+        ):
             self.assertIn(pattern, patterns)
+        self.assertNotIn("!**/.env.example", patterns)
+        self.assertIn("**/*.env", patterns)
+        self.assertTrue(Path("infrastructure/vps/sensor-replay.env").match("**/*.env"))
 
 
 if __name__ == "__main__":

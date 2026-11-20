@@ -4,7 +4,8 @@
 .idea
 **/.env
 **/.env.*
-!**/.env.example
+**/*.env
+**/*.env.*
 **/*-password
 **/password_file
 **/secrets.yaml

@@ -5,6 +5,8 @@ metadata:
   name: signal-processor
 spec:
   replicas: 1
+  strategy:
+    type: Recreate
   selector:
     matchLabels: {app: roadsense-processor}
   template:
@@ -26,6 +28,7 @@ spec:
                 secretKeyRef: {name: roadsense-mqtt-auth, key: password}
           volumeMounts:
             - {name: mqtt-ca, mountPath: /run/roadsense/mqtt, readOnly: true}
+            - {name: state, mountPath: /var/lib/roadsense-processor}
             - {name: tmp, mountPath: /tmp}
           readinessProbe:
             exec:
@@ -49,6 +52,8 @@ spec:
               - {key: ca.crt, path: ca.crt}
         - name: tmp
           emptyDir: {medium: Memory, sizeLimit: 8Mi}
+        - name: state
+          persistentVolumeClaim: {claimName: roadsense-processor-state}
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -181,6 +186,6 @@ spec:
     - from:
         - namespaceSelector:
             matchLabels:
-              network.openshift.io/policy-group: ingress
+              policy-group.network.openshift.io/ingress: ""
       ports:
         - {protocol: TCP, port: 8000}

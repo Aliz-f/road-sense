@@ -53,6 +53,11 @@ and thresholds. Mosquitto stores the durable analyzer session and queued QoS 1
 features in `roadsense-local-mqtt-data`, so broker and analyzer restarts do not
 discard queued Phase 04 work.
 
+Phase 06 adds `roadsense-local-processor-state`: before acknowledging raw or
+completion MQTT input, the Signal Processor commits it to a SQLite journal.
+After a restart it replays the active-run journal before becoming ready, so the
+original source-time anchor, sequence IDs, sample IDs, and open window survive.
+
 ## Final deployed communication
 ```text
 PERSONAL VPS                                CSC RAHTI
@@ -73,13 +78,17 @@ Local tests pass → build versioned Docker images → push images to approved r
 - Keep data files private; in local development use local read-only dataset mounts; in VPS use private read-only server mount.
 - Local Compose should bind external testing ports to loopback, not the internet.
 - VPS feeder initiates **outbound MQTT over TLS** to Rahti broker. VPS dashboard initiates **outbound HTTPS** to Rahti FastAPI.
-- Rahti database stays internal. Only tightly controlled MQTT TLS and API HTTPS endpoints are externally reachable. Validate actual OpenShift route capabilities before deploying.
+- Rahti database stays internal. API HTTPS may use a guarded Route. CSC
+  documents Routes as HTTP(S)-only, so raw MQTT/TLS requires a separately
+  approved LoadBalancer ingress IP and Service; validate it before deploying.
 - Dashboard protected by VPN/SSH tunnel or HTTPS+authentication, if exposed.
 - Preserve raw recording timestamps and unique replay run IDs; handle MQTT QoS1 duplicate messages idempotently.
 - One replica of each subscriber for MVP. No automatic pothole claims: outputs are exploratory vibration metrics.
 
 ## What belongs to Kubernetes?
-Rahti Deployments, Services, ConfigMaps, Secrets, probes, resource limits, Routes for permitted external endpoints, and PostgreSQL persistent storage (PVC).
+Rahti Deployments, Services, ConfigMaps, Secrets, probes, resource limits, an
+API Route, an approved MQTT LoadBalancer Service, and PostgreSQL/Mosquitto/
+processor-state persistent storage (PVCs).
 
 ## Course assessment note
 The project includes a true laptop-based local Docker execution **and** remote VPS↔Rahti communication. Check the official assessment language as part of Phase 00, but do not describe owning a personal VPS as a violation.

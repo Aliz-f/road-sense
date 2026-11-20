@@ -13,7 +13,8 @@ Passed laptop end-to-end Phase 05; approved Docker registry; personal VPS specs 
 2. Build/push versioned images to approved registry; separate configuration from images.
 3. Inventory, secure and prepare personal VPS with Docker Engine/Compose and restricted MUHOS dataset volume (with owner approval).
 4. Deploy **only** sensor-replay and dashboard to VPS using Docker Compose; keep it initially private/guarded.
-5. Inspect Rahti namespace, quotas, PVC classes and MQTT/TLS/HTTPS Route capabilities.
+5. Inspect Rahti namespace, quotas, PVC classes, HTTPS Route support, and CSC
+   approval/assignment for a raw-TCP LoadBalancer ingress IP.
 6. Deploy Mosquitto, signal-processor, road-analyzer, PostgreSQL/PVC and FastAPI to Rahti with resource limits, probes, private DB and controlled external endpoints.
 7. Point VPS feeder to Rahti broker via authenticated MQTT/TLS; dashboard to Rahti API via HTTPS. Do not expose database publicly.
 8. Run and record full real-data trace VPS CSV → Rahti broker → processor → analyzer → database → API → VPS dashboard.

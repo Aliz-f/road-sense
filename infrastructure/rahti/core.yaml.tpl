@@ -30,6 +30,7 @@ data:
   POSTGRES_CONNECT_RETRIES: "30"
   ANALYZER_READY_FILE: /tmp/road-analyzer-ready
   PROCESSOR_READY_FILE: /tmp/signal-processor-ready
+  PROCESSOR_STATE_FILE: /var/lib/roadsense-processor/processor-state.sqlite3
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -59,6 +60,16 @@ apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: roadsense-mqtt-data
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: roadsense-processor-state
 spec:
   accessModes: [ReadWriteOnce]
   resources:
@@ -152,6 +163,10 @@ spec:
     metadata:
       labels: {app: roadsense-mqtt-broker}
     spec:
+      # Required by CSC when externalTrafficPolicy=Local is used for the
+      # separately approved MQTT LoadBalancer Service.
+      nodeSelector:
+        rahti.csc.fi/local-load-balancer: ""
       initContainers:
         - name: verify-mqtt-persistence-writable
           image: ${BROKER_IMAGE}
