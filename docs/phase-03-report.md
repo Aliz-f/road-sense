@@ -206,12 +206,11 @@ unrelated local Docker workloads were not modified.
   starts at `sample_index=0`. If the initial batch is permanently missing, the
   processor flags the sequence/sample gap but cannot reconstruct the original
   session anchor because raw v1 does not carry it.
-- Active run state and duplicate caches are in memory. A processor restart
-  during an unfinished run requires replaying that recording with a new
-  `run_id`; durable recovery is not claimed. Phase 04 persistence must not be
-  assumed to solve this unless processor checkpointing or a replay protocol is
-  explicitly designed. Completed run caches are not automatically evicted;
-  long-lived deployments need a bounded retention/checkpoint policy.
+- Phase 03 originally kept active state only in memory. Phase 06 resolves that
+  deployment risk with a durable input journal replayed before readiness; the
+  Phase 03 calculation and payload contract are unchanged. Completed in-memory
+  run caches are still not automatically evicted, so long-lived deployments
+  need a bounded cache-retention policy beyond this MVP.
 - The single local development MQTT identity has access to all three topics.
   Phase 06 must create least-privilege producer/consumer identities and
   revalidate externally managed TLS and Rahti ingress before any deployment.

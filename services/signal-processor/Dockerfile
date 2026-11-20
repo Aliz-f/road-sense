@@ -12,6 +12,10 @@ RUN pip install --no-cache-dir --require-hashes -r requirements.txt
 
 COPY services/signal-processor/src ./src
 
+# Writable only through the mounted state volume. Group 0 supports OpenShift's
+# assigned UID model; the fixed UID keeps local Compose compatible.
+RUN install -d -m 0770 -o 10001 -g 0 /var/lib/roadsense-processor
+
 FROM base AS runtime
 USER 10001:10001
 ENTRYPOINT ["python", "-m", "signal_processor"]

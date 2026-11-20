@@ -40,6 +40,9 @@ x-processor-environment: &processor-environment
       source: ${MQTT_RUNTIME_DIR:?run tools/prepare_phase02_local.sh}/ca.crt
       target: /run/roadsense/mqtt/ca.crt
       read_only: true
+    - type: volume
+      source: processor-state
+      target: /var/lib/roadsense-processor
   networks:
     - roadsense
   read_only: true
@@ -202,10 +205,17 @@ services:
     <<: [*processor-image, *processor-environment]
     environment:
       PROCESSOR_QUEUE_CAPACITY: ${PROCESSOR_QUEUE_CAPACITY:-1024}
+      PROCESSOR_REJECTED_TOMBSTONE_LIMIT: ${PROCESSOR_REJECTED_TOMBSTONE_LIMIT:-1024}
     depends_on:
       mqtt-broker:
         condition: service_healthy
     stop_grace_period: 15s
+    healthcheck:
+      test: ["CMD", "python", "-m", "signal_processor.health"]
+      interval: 3s
+      timeout: 4s
+      retries: 20
+      start_period: 3s
     restart: unless-stopped
 
   postgres:
@@ -527,3 +537,5 @@ volumes:
     name: roadsense-local-mqtt-data
   postgres-data:
     name: roadsense-local-postgres-data
+  processor-state:
+    name: roadsense-local-processor-state

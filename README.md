@@ -71,6 +71,7 @@ MVP: replay one verified Bosch IMU CSV recording; compute time-window vibration 
 
 Data source: [MUHOS documentation](https://m3s-kuura.github.io/muhos-dataset/). License, citation, schema, timestamps and units must be verified from actual downloaded files before implementation. Never commit raw archives or credentials.
 
-**Next action:** review the completed [Phase 05 report](docs/phase-05-report.md).
-Phase 06 remains unimplemented and requires separate explicit selection and
-approval before any VPS or Rahti access.
+**Next action:** review [Phase 06 deployment preparation](docs/phase-06-deployment-guide.md).
+Phase 06 preparation files do not authorize remote access or deployment; VPS/Rahti deployment and acceptance remain pending explicit approval.
+Offline correction evidence and live verification gaps are recorded in the
+[Phase 06 report](docs/phase-06-report.md).
