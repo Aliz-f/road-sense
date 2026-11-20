@@ -51,8 +51,9 @@ The selected MVP input remains archive `Bumpy Gravel - imu.tar`, member
 
 ## Local Compose boundary
 
-The application Compose file uses one project name (`roadsense-local`) and one
-private application network. Containers communicate using these service names:
+The application Compose file uses one project name (`roadsense-local`), the
+internal `roadsense` backend network, and the `browser` network shared only by
+API and dashboard. Containers communicate using these service names:
 
 | Service | Health/readiness signal | Host publication |
 |---|---|---|
@@ -98,7 +99,7 @@ Phase 02 created `infrastructure/compose/local.compose.yaml`; Phase 03 added
 Signal Processor and the `roadsense/v1/imu/run-complete` control path. Phase 04
 added Road Analyzer, migrations, and PostgreSQL on the named
 `roadsense-local-postgres-data` volume, plus broker/session persistence on
-`roadsense-local-mqtt-data`. The
+`roadsense-local-mqtt-data`. Phase 05 added FastAPI and Streamlit/Plotly. The
 local broker limits a subscriber to one unacknowledged QoS message; the
 processor and analyzer manually acknowledge only after processing so bounded
 queues apply backpressure without blocking Paho callbacks. Generate the ignored local
@@ -109,7 +110,7 @@ consistently:
 ./tools/prepare_phase02_local.sh
 docker compose --env-file config/environments/local/.env.phase02 \
   -f infrastructure/compose/local.compose.yaml up --build -d --wait \
-  mqtt-broker postgres signal-processor road-analyzer
+  mqtt-broker postgres signal-processor road-analyzer api dashboard
 docker compose --env-file config/environments/local/.env.phase02 \
   -f infrastructure/compose/local.compose.yaml run --rm sensor-replay
 docker compose --env-file config/environments/local/.env.phase02 \
@@ -120,8 +121,13 @@ docker compose --env-file config/environments/local/.env.phase02 \
   -f infrastructure/compose/local.compose.yaml down --remove-orphans
 ```
 
+Open `http://127.0.0.1:8501` for the dashboard or
+`http://127.0.0.1:8000/docs` for the local OpenAPI UI. The one-shot replay can
+be rerun with a new `run_id`; the dashboard lists stored runs through FastAPI.
+
 The one-shot `analyzer-migrate` service runs automatically before the analyzer.
-Use `./tests/phase04_e2e.sh` for the real-data, database/broker/process outage,
+Use `./tests/phase05_e2e.sh` for the complete real-data API/dashboard pipeline
+and `./tests/phase04_e2e.sh` for database/broker/process outage,
 outbox, rotation, duplicate, and repeated-volume checks. Do not add `--volumes`
 to routine teardown; that would delete local database and queued MQTT data.
 
@@ -151,7 +157,7 @@ either staged credential.
 - The laptop already runs unrelated Minikube/course containers. Use the unique
   Compose project name and never run broad cleanup commands such as
   `docker system prune`.
-- Keep at least several GB of Docker Desktop memory available for the future
+- Keep at least several GB of Docker Desktop memory available for the
   seven-service stack; reassess the current 8 GB allocation if OOM events occur.
 - Dataset mounts are read-only; raw archives, `.env` files, tokens, passwords,
   and certificates stay untracked.

@@ -1,9 +1,10 @@
 # RoadSense — MUHOS Distributed Vehicle Vibration Monitoring
 
-> **LOCAL PHASE 04** — the laptop Docker Compose stack now runs verified MUHOS
-> Sensor Replay → authenticated TLS MQTT → source-time Signal Processor →
-> Road Analyzer → persistent PostgreSQL, with detected events returned through
-> MQTT. **No API/UI, remote deployment, or cloud resource exists yet.**
+> **LOCAL PHASE 05** — the complete laptop Docker Compose application now runs
+> verified MUHOS Sensor Replay → authenticated TLS MQTT → source-time Signal
+> Processor → Road Analyzer → persistent PostgreSQL → typed FastAPI →
+> Streamlit/Plotly. FastAPI and Streamlit bind to loopback only; MQTT and the
+> database remain internal. **No remote deployment or cloud resource exists yet.**
 
 RoadSense is a Software Defined Systems final-project design. It replays [MUHOS](https://m3s-kuura.github.io/muhos-dataset/) Bosch IMU measurements to explore vehicle vibration patterns in a distributed system. Vibration alerts are exploratory metrics, **not validated pothole or road-safety detection**.
 
@@ -70,5 +71,6 @@ MVP: replay one verified Bosch IMU CSV recording; compute time-window vibration 
 
 Data source: [MUHOS documentation](https://m3s-kuura.github.io/muhos-dataset/). License, citation, schema, timestamps and units must be verified from actual downloaded files before implementation. Never commit raw archives or credentials.
 
-**Next action:** review the completed [Phase 04 report](docs/phase-04-report.md).
-Phase 05 remains unimplemented and requires separate explicit selection.
+**Next action:** review the completed [Phase 05 report](docs/phase-05-report.md).
+Phase 06 remains unimplemented and requires separate explicit selection and
+approval before any VPS or Rahti access.

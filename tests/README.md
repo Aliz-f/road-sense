@@ -1,7 +1,7 @@
 # Tests
 
-**Status: Phase 02 replay/MQTT, Phase 03 signal-processing, and Phase 04
-analyzer/PostgreSQL tests are implemented. API and UI tests do not yet exist.**
+**Status: Phase 02 replay/MQTT, Phase 03 signal-processing, Phase 04
+analyzer/PostgreSQL, and Phase 05 API/dashboard tests are implemented.**
 
 `phase02_e2e.sh` builds the Sensor Replay image, runs its unit suite, verifies
 broker authentication, uses a separate schema-validating subscriber, and
@@ -40,3 +40,17 @@ recreation. Routine cleanup intentionally does not delete that volume.
 
 See `../docs/phase-04-report.md` for the threshold rationale, actual output,
 and rollback procedure.
+
+`phase05_e2e.sh` runs seven API unit/config tests, four dashboard client/chart/UI
+smoke tests, starts the complete local stack, replays 1,536 real Bumpy-gravel
+samples, independently recomputes the 19 expected feature windows, checks the
+five expected event windows, renders the three Plotly traces through the
+dashboard API client, verifies HTTP health/UI responses, and asserts that only
+the API and dashboard are loopback-published.
+
+```sh
+./tests/phase05_e2e.sh
+```
+
+See `../docs/phase-05-report.md` for actual output, startup commands, and
+remaining limitations.
