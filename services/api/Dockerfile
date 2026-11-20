@@ -1,0 +1,22 @@
+# syntax=docker/dockerfile:1.7@sha256:a57df69d0ea827fb7266491f2813635de6f17269be881f696fbfdf2d83dda33e
+FROM python:3.12.7-slim-bookworm@sha256:60d9996b6a8a3689d36db740b49f4327be3be09a21122bd02fb8895abb38b50d AS base
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app/src
+WORKDIR /app
+COPY services/api/requirements.txt ./requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
+COPY services/api/src ./src
+
+FROM base AS runtime
+USER 10001:10001
+EXPOSE 8000
+ENTRYPOINT ["uvicorn", "roadsense_api.app:app", "--host", "0.0.0.0", "--port", "8000", "--no-access-log"]
+
+FROM base AS test
+COPY services/api/requirements-test.txt ./requirements-test.txt
+RUN pip install --no-cache-dir -r requirements-test.txt
+COPY services/api/tests ./tests
+USER 10001:10001
+ENTRYPOINT ["python", "-m", "unittest", "discover", "-s", "tests", "-v"]

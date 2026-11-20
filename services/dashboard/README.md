@@ -1,9 +1,18 @@
-# VPS dashboard
+# RoadSense dashboard
 
-**Status: PLANNED ONLY — no code or deployment exists.**
+**Status: Phase 05 implemented and verified locally. No VPS deployment exists.**
 
-Phase 05 builds the Streamlit/Plotly dashboard and HTTPS API client.
+The Streamlit/Plotly dashboard selects recordings and runs, charts RMS and peak
+deviation against source UTC time, overlays exploratory threshold events, and
+shows processing status and immutable provenance. It calls FastAPI only; it has
+no database or MQTT access. The local URL is `http://127.0.0.1:8501`.
 
-See the numbered phase specifications under ../../phases/ and docs/architecture.md.
+Run its containerized smoke suite with:
 
-Build and test Streamlit on the laptop in Phase 05, then deploy to the VPS in Phase 06.
+```sh
+docker compose --env-file config/environments/local/.env.phase02 \
+  -f infrastructure/compose/local.compose.yaml run --rm --no-deps dashboard-smoke-tests
+```
+
+See `../../docs/phase-05-report.md`. Phase 06 may deploy this tested image to
+the VPS only after explicit approval.

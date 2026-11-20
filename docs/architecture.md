@@ -26,16 +26,24 @@ LAPTOP: MUHOS CSV → feeder → MQTT broker → processor → MQTT broker → a
 ```
 In local Compose all containers communicate over a private Docker network using Docker service names. Dashboard uses local FastAPI address. All services are fully tested locally.
 
-Through Phase 04, the implemented local path is Sensor Replay → authenticated
+Through Phase 05, the implemented local path is Sensor Replay → authenticated
 TLS Mosquitto → Signal Processor → MQTT feature topic → Road Analyzer →
-PostgreSQL. Threshold events are published back to the MQTT event topic. Sensor Replay also
+PostgreSQL → FastAPI → Streamlit/Plotly. Threshold events are published back to
+the MQTT event topic. Sensor Replay also
 sends a provenance-bound run-completion control message so the processor can
 publish the final source-time window without stopping. The broker's one-message
 QoS inflight limit and both subscribers' manual acknowledgements provide bounded
 backpressure without blocking Paho network callbacks. The processor and analyzer
 have no host ports and use read-only container filesystems. PostgreSQL is
-internal-only and uses the named `roadsense-local-postgres-data` volume. API and
-dashboard remain future phases.
+internal-only and uses the named `roadsense-local-postgres-data` volume.
+FastAPI performs only read-only, parameterized queries and the dashboard has no
+database or MQTT access.
+
+The Compose stack has two networks. `roadsense` is internal and carries MQTT,
+database, analyzer, processor, and API database traffic. `browser` connects only
+FastAPI and Streamlit and permits the explicitly loopback-bound host mappings
+`127.0.0.1:8000` and `127.0.0.1:8501`. This split is required because the local
+Docker engine does not publish ports attached only to an internal network.
 
 The analyzer commits each event and its MQTT outbox payload atomically, then
 publishes pending rows with QoS 1 and records completion. This closes the

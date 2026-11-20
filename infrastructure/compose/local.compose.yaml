@@ -80,6 +80,20 @@ x-analyzer-environment: &analyzer-environment
   security_opt:
     - no-new-privileges:true
 
+x-api-image: &api-image
+  image: roadsense/api:phase05-local
+  build:
+    context: ../..
+    dockerfile: services/api/Dockerfile
+    target: runtime
+
+x-dashboard-image: &dashboard-image
+  image: roadsense/dashboard:phase05-local
+  build:
+    context: ../..
+    dockerfile: services/dashboard/Dockerfile
+    target: runtime
+
 services:
   mqtt-data-init:
     image: eclipse-mosquitto:2.0.22@sha256:81a6193ae693942a3231cd3ac52875b02b7e3a19da671b2fb4b55cc874c5b279
@@ -254,6 +268,67 @@ services:
       retries: 20
       start_period: 3s
 
+  api:
+    <<: *api-image
+    user: "${LOCAL_UID:?run tools/prepare_phase02_local.sh}:${LOCAL_GID:?run tools/prepare_phase02_local.sh}"
+    env_file:
+      - ../../config/environments/local/.env.phase02
+    volumes:
+      - type: bind
+        source: ../../config/environments/local/runtime/postgres
+        target: /run/roadsense/postgres
+        read_only: true
+    networks:
+      - roadsense
+      - browser
+    ports:
+      - "${API_BIND_ADDRESS:-127.0.0.1}:${API_HOST_PORT:-8000}:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      analyzer-migrate:
+        condition: service_completed_successfully
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=8m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=2).read()"]
+      interval: 3s
+      timeout: 4s
+      retries: 20
+      start_period: 3s
+    restart: unless-stopped
+
+  dashboard:
+    <<: *dashboard-image
+    env_file:
+      - ../../config/environments/local/.env.phase02
+    networks:
+      - browser
+    ports:
+      - "${DASHBOARD_BIND_ADDRESS:-127.0.0.1}:${DASHBOARD_HOST_PORT:-8501}:8501"
+    depends_on:
+      api:
+        condition: service_healthy
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8501/_stcore/health', timeout=2).read()"]
+      interval: 3s
+      timeout: 4s
+      retries: 30
+      start_period: 5s
+    restart: unless-stopped
+
   postgres-password-rotate:
     <<: [*analyzer-image, *analyzer-environment]
     entrypoint: ["python", "-m", "road_analyzer.rotate_password"]
@@ -332,6 +407,83 @@ services:
     security_opt:
       - no-new-privileges:true
 
+  api-unit-tests:
+    image: roadsense/api-test:phase05-local
+    build:
+      context: ../..
+      dockerfile: services/api/Dockerfile
+      target: test
+    profiles: ["test"]
+    network_mode: none
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+  api-credential-rotation-helper:
+    image: roadsense/api-test:phase05-local
+    build:
+      context: ../..
+      dockerfile: services/api/Dockerfile
+      target: test
+    entrypoint: ["python", "tests/credential_rotation_helper.py"]
+    user: "${LOCAL_UID:?run tools/prepare_phase02_local.sh}:${LOCAL_GID:?run tools/prepare_phase02_local.sh}"
+    env_file:
+      - ../../config/environments/local/.env.phase02
+    volumes:
+      - type: bind
+        source: ../../config/environments/local/runtime/postgres
+        target: /run/roadsense/postgres
+    networks:
+      - roadsense
+    profiles: ["test"]
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+  dashboard-smoke-tests:
+    image: roadsense/dashboard-test:phase05-local
+    build:
+      context: ../..
+      dockerfile: services/dashboard/Dockerfile
+      target: test
+    profiles: ["test"]
+    network_mode: none
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=32m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+  dashboard-integration-helper:
+    image: roadsense/dashboard-test:phase05-local
+    build:
+      context: ../..
+      dockerfile: services/dashboard/Dockerfile
+      target: test
+    entrypoint: ["python", "tests/integration_helper.py"]
+    env_file:
+      - ../../config/environments/local/.env.phase02
+    networks:
+      - browser
+    profiles: ["test"]
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=32m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
   analyzer-integration-helper:
     image: roadsense/road-analyzer-test:phase04-local
     build:
@@ -367,6 +519,8 @@ services:
 networks:
   roadsense:
     internal: true
+  browser:
+    internal: false
 
 volumes:
   mqtt-data:

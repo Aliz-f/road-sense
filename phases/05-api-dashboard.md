@@ -1,6 +1,7 @@
 # Phase 05 — Local FastAPI and Streamlit Dashboard
 
-**Status:** Not started. Documentation only.
+**Status:** Completed locally on 2026-11-20. See
+[`docs/phase-05-report.md`](../docs/phase-05-report.md).
 
 ## Goal
 Complete the **whole application on the laptop**, running all services via Docker Compose and a local browser.
@@ -21,11 +22,11 @@ Phases 02–04 implemented locally, PostgreSQL data and API contracts.
 Dockerized FastAPI and Streamlit services, complete laptop Compose environment, automated/smoke tests and local end-to-end report.
 
 ## Exit checklist
-- [ ] All seven services operate together **on laptop**.
-- [ ] Real IMU source produces features, events, API records and visualization.
-- [ ] Each service has independent container ownership and documented logs.
-- [ ] HTTP paths validated, non-sensitive local ports accessible.
-- [ ] App works end-to-end without VPS or Rahti.
+- [x] All seven services operate together **on laptop**.
+- [x] Real IMU source produces features, events, API records and visualization.
+- [x] Each service has independent container ownership and documented logs.
+- [x] HTTP paths validated, non-sensitive local ports accessible.
+- [x] App works end-to-end without VPS or Rahti.
 
 ## Codex request
 Implement **only Phase 05**. Finish the app on my **local laptop** with full Docker Compose integration and tests. Do not deploy remotely or start Phase 06.

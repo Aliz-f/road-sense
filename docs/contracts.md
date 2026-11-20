@@ -167,9 +167,31 @@ PostgreSQL volume persists across container recreation and has no host port.
 Composite foreign keys ensure that run/session/sensor, feature/run/algorithm,
 event/feature/observation, and event/rule values cannot drift independently.
 
-## API (proposed)
+## API (implemented in Phase 05)
 
-GET /health/live, /health/ready, /api/v1/sessions, /api/v1/runs, /api/v1/runs/{id}/features, /api/v1/runs/{id}/events, and /api/v1/status. Responses are JSON with validation and pagination; no arbitrary SQL exposure.
+The read-only FastAPI service exposes:
+
+| Method and path | Response |
+|---|---|
+| `GET /health/live` | Process liveness; does not query dependencies. |
+| `GET /health/ready` | Readiness after a read-only PostgreSQL query. |
+| `GET /api/v1/sessions` | Paginated immutable recording provenance and run count. |
+| `GET /api/v1/runs?session_id=...` | Paginated observed runs with feature/event counts. |
+| `GET /api/v1/runs/{run_id}/features` | Paginated source-ordered feature windows for a UUID run. |
+| `GET /api/v1/runs/{run_id}/events` | Paginated threshold events joined to exact feature source bounds and flags. |
+| `GET /api/v1/status` | Aggregate session/run/feature/event and pending-outbox counts. |
+
+Collection responses contain `items`, `limit`, `offset`, `count`, and `total`.
+`limit` is 1–500 and `offset` is non-negative. Invalid query values or run UUIDs
+return 422; a valid unknown run returns 404. Response models reject unexpected
+fields and validate UUIDs, timestamps, non-negative metrics, enumerations, and
+counts. Queries are fixed, parameterized, and executed in read-only database
+transactions; the API exposes no arbitrary SQL or mutation endpoint.
+Feature and event totals on the runs page are calculated independently for
+each run, so neither count is multiplied by the other relation. Connections
+reread the current PostgreSQL password file and may use the staged
+`password.previous` only as an interrupted-rotation fallback, consistent with
+the Phase 04 analyzer.
 
 ## Required design checks
 
