@@ -172,7 +172,7 @@ spec:
             - -ec
             - 'probe=/mosquitto/data/.roadsense-write-test-$$; (umask 077 && : > "$probe") && rm -f "$probe"'
           resources:
-            requests: {cpu: 10m, memory: 16Mi}
+            requests: {cpu: 50m, memory: 16Mi}
             limits: {cpu: 50m, memory: 32Mi}
           securityContext:
             runAsNonRoot: true
