@@ -19,7 +19,7 @@ LIMITATION = (
 def main() -> None:
     st.set_page_config(page_title="RoadSense", page_icon="🚗", layout="wide")
     st.title("RoadSense vehicle-vibration explorer")
-    st.warning(LIMITATION)
+    # st.warning(LIMITATION)
     client = ApiClient(os.environ.get("API_INTERNAL_URL", "http://api:8000"))
 
     try:
