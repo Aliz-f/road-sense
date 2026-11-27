@@ -2,8 +2,8 @@
 set -eu
 
 repository_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-phase01_env="$repository_root/config/environments/local/.env"
-phase02_env="$repository_root/config/environments/local/.env.phase02"
+input_env="$repository_root/config/environments/local/.env"
+runtime_env="$repository_root/config/environments/local/.env.runtime"
 runtime_dir="$repository_root/config/environments/local/runtime/mqtt"
 postgres_runtime_dir="$repository_root/config/environments/local/runtime/postgres"
 postgres_password_file="$postgres_runtime_dir/password"
@@ -16,11 +16,11 @@ elif test "$#" -gt 0; then
   exit 2
 fi
 
-test -f "$phase01_env" || {
-  printf '%s\n' 'missing config/environments/local/.env; complete Phase 01 first' >&2
+test -f "$input_env" || {
+  printf '%s\n' 'missing config/environments/local/.env; set ROADSENSE_DATASET_ROOT first' >&2
   exit 1
 }
-dataset_root=$(sed -n 's/^ROADSENSE_DATASET_ROOT=//p' "$phase01_env")
+dataset_root=$(sed -n 's/^ROADSENSE_DATASET_ROOT=//p' "$input_env")
 test -d "$dataset_root"
 test -r "$dataset_root/Bumpy Gravel - imu.tar"
 command -v openssl >/dev/null
@@ -33,12 +33,12 @@ chmod 750 "$postgres_runtime_dir"
 # stable source of truth and --force never changes it.
 if ! test -s "$postgres_password_file"; then
   legacy_postgres_password=
-  if test -s "$phase02_env"; then
-    legacy_postgres_password=$(sed -n 's/^POSTGRES_PASSWORD=//p' "$phase02_env")
+  if test -s "$runtime_env"; then
+    legacy_postgres_password=$(sed -n 's/^POSTGRES_PASSWORD=//p' "$runtime_env")
   fi
   if test -n "$legacy_postgres_password"; then
     printf '%s\n' "$legacy_postgres_password" > "$postgres_password_file"
-  elif ! test -s "$phase02_env"; then
+  elif ! test -s "$runtime_env"; then
     openssl rand -hex 32 > "$postgres_password_file"
   else
     printf '%s\n' 'existing environment has no recoverable PostgreSQL password; refusing to regenerate it' >&2
@@ -78,7 +78,7 @@ if test "$force" = true || test "$certificate_valid" != true; then
   chmod 644 "$runtime_dir/ca.crt" "$runtime_dir/server.crt"
 fi
 
-if test "$force" = true || ! test -s "$phase02_env"; then
+if test "$force" = true || ! test -s "$runtime_env"; then
   mqtt_password=$(openssl rand -hex 24)
   {
     printf 'ROADSENSE_ENV=local\n'
@@ -127,15 +127,15 @@ if test "$force" = true || ! test -s "$phase02_env"; then
     printf 'MAX_PAYLOAD_BYTES=131072\n'
     printf 'MAX_SAMPLES=0\n'
     printf 'REPLAY_RATE=1.0\n'
-  } > "$phase02_env"
-  chmod 600 "$phase02_env"
+  } > "$runtime_env"
+  chmod 600 "$runtime_env"
 fi
 
 ensure_setting() {
   setting_name=$1
   setting_value=$2
-  if ! grep -q "^${setting_name}=" "$phase02_env"; then
-    printf '%s=%s\n' "$setting_name" "$setting_value" >> "$phase02_env"
+  if ! grep -q "^${setting_name}=" "$runtime_env"; then
+    printf '%s=%s\n' "$setting_name" "$setting_value" >> "$runtime_env"
   fi
 }
 
@@ -149,14 +149,14 @@ ensure_setting POSTGRES_HOST postgres
 ensure_setting POSTGRES_PORT 5432
 ensure_setting POSTGRES_DB roadsense
 ensure_setting POSTGRES_USER roadsense
-sed -i '/^POSTGRES_PASSWORD=/d' "$phase02_env"
+sed -i '/^POSTGRES_PASSWORD=/d' "$runtime_env"
 ensure_setting POSTGRES_PASSWORD_FILE /run/roadsense/postgres/password
 ensure_setting POSTGRES_PREVIOUS_PASSWORD_FILE /run/roadsense/postgres/password.previous
 ensure_setting POSTGRES_CONNECT_TIMEOUT_SECONDS 5
 ensure_setting POSTGRES_CONNECT_RETRIES 30
 ensure_setting POSTGRES_CONNECT_RETRY_DELAY_SECONDS 1
 ensure_setting ANALYZER_OUTBOX_POLL_SECONDS 1
-chmod 600 "$phase02_env"
+chmod 600 "$runtime_env"
 
 openssl verify -CAfile "$runtime_dir/ca.crt" "$runtime_dir/server.crt" >/dev/null
-printf '%s\n' 'Phase 02 local credentials and TLS material: ready (ignored by Git)'
+printf '%s\n' 'Local credentials and TLS material: ready (ignored by Git)'

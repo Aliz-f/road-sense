@@ -31,7 +31,7 @@ root = Path(sys.argv[1])
 (root / "postgres-password").write_text(secrets.token_hex(32), encoding="ascii")
 PY
 openssl req -x509 -newkey rsa:3072 -sha256 -nodes -days 365 \
-  -subj "/CN=RoadSense Phase06 Private CA" \
+  -subj "/CN=RoadSense Rahti Private CA" \
   -addext "basicConstraints=critical,CA:TRUE" \
   -addext "keyUsage=critical,keyCertSign,cRLSign" \
   -keyout "$dir/ca.key" -out "$dir/ca.crt" >/dev/null 2>&1
@@ -65,6 +65,6 @@ docker run --rm --user "$(id -u):$(id -g)" --entrypoint mosquitto_passwd \
 chmod 600 "$dir"/*
 chmod 644 "$dir/ca.crt" "$dir/server.crt"
 openssl verify -CAfile "$dir/ca.crt" "$dir/server.crt" >/dev/null
-python3 "$(dirname "$0")/phase06_validate_secret_files.py" "$dir" >/dev/null
+python3 "$(dirname "$0")/validate_secrets.py" "$dir" >/dev/null
 echo "Generated private demo materials locally: $dir"
 echo "Never commit files or copy ca.key to Rahti."

@@ -47,7 +47,7 @@ WITH legacy_events AS (
   JOIN sessions s ON s.session_id=r.session_id
   WHERE e.created_at < (
     SELECT applied_at FROM schema_migrations
-    WHERE version='0002_phase04_reliability.sql'
+    WHERE version='0002_reliability.sql'
   )
 )
 UPDATE event_outbox o

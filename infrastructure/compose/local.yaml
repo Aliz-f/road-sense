@@ -1,7 +1,7 @@
 name: roadsense-local
 
 x-sensor-image: &sensor-image
-  image: roadsense/sensor-replay:phase02-local
+  image: roadsense/sensor-replay:local
   build:
     context: ../..
     dockerfile: services/sensor-replay/Dockerfile
@@ -26,7 +26,7 @@ x-sensor-environment: &sensor-environment
     - no-new-privileges:true
 
 x-processor-image: &processor-image
-  image: roadsense/signal-processor:phase03-local
+  image: roadsense/signal-processor:local
   build:
     context: ../..
     dockerfile: services/signal-processor/Dockerfile
@@ -54,7 +54,7 @@ x-processor-environment: &processor-environment
     - no-new-privileges:true
 
 x-analyzer-image: &analyzer-image
-  image: roadsense/road-analyzer:phase04-local
+  image: roadsense/road-analyzer:local
   build:
     context: ../..
     dockerfile: services/road-analyzer/Dockerfile
@@ -84,14 +84,14 @@ x-analyzer-environment: &analyzer-environment
     - no-new-privileges:true
 
 x-api-image: &api-image
-  image: roadsense/api:phase05-local
+  image: roadsense/api:local
   build:
     context: ../..
     dockerfile: services/api/Dockerfile
     target: runtime
 
 x-dashboard-image: &dashboard-image
-  image: roadsense/dashboard:phase05-local
+  image: roadsense/dashboard:local
   build:
     context: ../..
     dockerfile: services/dashboard/Dockerfile
@@ -339,192 +339,6 @@ services:
       start_period: 5s
     restart: unless-stopped
 
-  postgres-password-rotate:
-    <<: [*analyzer-image, *analyzer-environment]
-    entrypoint: ["python", "-m", "road_analyzer.rotate_password"]
-    profiles: ["maintenance"]
-    volumes:
-      - type: bind
-        source: ../../config/environments/local/runtime/postgres
-        target: /run/roadsense/postgres
-    networks:
-      - roadsense
-    restart: "no"
-
-  mqtt-subscriber:
-    <<: [*sensor-image, *sensor-environment]
-    entrypoint: ["python", "-m", "sensor_replay.subscriber"]
-    profiles: ["test"]
-    restart: "no"
-
-  feature-subscriber:
-    <<: [*processor-image, *processor-environment]
-    entrypoint: ["python", "-m", "signal_processor.feature_subscriber"]
-    profiles: ["test"]
-    restart: "no"
-
-  event-subscriber:
-    <<: [*analyzer-image, *analyzer-environment]
-    entrypoint: ["python", "-m", "road_analyzer.event_subscriber"]
-    profiles: ["test"]
-    restart: "no"
-
-  unit-tests:
-    image: roadsense/sensor-replay-test:phase02-local
-    build:
-      context: ../..
-      dockerfile: services/sensor-replay/Dockerfile
-      target: test
-    profiles: ["test"]
-    network_mode: none
-    read_only: true
-    tmpfs:
-      - /tmp:rw,noexec,nosuid,size=16m
-    cap_drop:
-      - ALL
-    security_opt:
-      - no-new-privileges:true
-
-  processor-unit-tests:
-    image: roadsense/signal-processor-test:phase03-local
-    build:
-      context: ../..
-      dockerfile: services/signal-processor/Dockerfile
-      target: test
-    profiles: ["test"]
-    network_mode: none
-    read_only: true
-    tmpfs:
-      - /tmp:rw,noexec,nosuid,size=16m
-    cap_drop:
-      - ALL
-    security_opt:
-      - no-new-privileges:true
-
-  analyzer-unit-tests:
-    image: roadsense/road-analyzer-test:phase04-local
-    build:
-      context: ../..
-      dockerfile: services/road-analyzer/Dockerfile
-      target: test
-    profiles: ["test"]
-    network_mode: none
-    read_only: true
-    tmpfs:
-      - /tmp:rw,noexec,nosuid,size=16m
-    cap_drop:
-      - ALL
-    security_opt:
-      - no-new-privileges:true
-
-  api-unit-tests:
-    image: roadsense/api-test:phase05-local
-    build:
-      context: ../..
-      dockerfile: services/api/Dockerfile
-      target: test
-    profiles: ["test"]
-    network_mode: none
-    read_only: true
-    tmpfs:
-      - /tmp:rw,noexec,nosuid,size=16m
-    cap_drop:
-      - ALL
-    security_opt:
-      - no-new-privileges:true
-
-  api-credential-rotation-helper:
-    image: roadsense/api-test:phase05-local
-    build:
-      context: ../..
-      dockerfile: services/api/Dockerfile
-      target: test
-    entrypoint: ["python", "tests/credential_rotation_helper.py"]
-    user: "${LOCAL_UID:?run tools/prepare_phase02_local.sh}:${LOCAL_GID:?run tools/prepare_phase02_local.sh}"
-    env_file:
-      - ../../config/environments/local/.env.phase02
-    volumes:
-      - type: bind
-        source: ../../config/environments/local/runtime/postgres
-        target: /run/roadsense/postgres
-    networks:
-      - roadsense
-    profiles: ["test"]
-    read_only: true
-    tmpfs:
-      - /tmp:rw,noexec,nosuid,size=16m
-    cap_drop:
-      - ALL
-    security_opt:
-      - no-new-privileges:true
-
-  dashboard-smoke-tests:
-    image: roadsense/dashboard-test:phase05-local
-    build:
-      context: ../..
-      dockerfile: services/dashboard/Dockerfile
-      target: test
-    profiles: ["test"]
-    network_mode: none
-    read_only: true
-    tmpfs:
-      - /tmp:rw,noexec,nosuid,size=32m
-    cap_drop:
-      - ALL
-    security_opt:
-      - no-new-privileges:true
-
-  dashboard-integration-helper:
-    image: roadsense/dashboard-test:phase05-local
-    build:
-      context: ../..
-      dockerfile: services/dashboard/Dockerfile
-      target: test
-    entrypoint: ["python", "tests/integration_helper.py"]
-    env_file:
-      - ../../config/environments/local/.env.phase02
-    networks:
-      - browser
-    profiles: ["test"]
-    read_only: true
-    tmpfs:
-      - /tmp:rw,noexec,nosuid,size=32m
-    cap_drop:
-      - ALL
-    security_opt:
-      - no-new-privileges:true
-
-  analyzer-integration-helper:
-    image: roadsense/road-analyzer-test:phase04-local
-    build:
-      context: ../..
-      dockerfile: services/road-analyzer/Dockerfile
-      target: test
-    env_file:
-      - ../../config/environments/local/.env.phase02
-    volumes:
-      - type: bind
-        source: ${ROADSENSE_DATASET_ROOT:?set the private dataset path}
-        target: /data/archives
-        read_only: true
-      - type: bind
-        source: ${MQTT_RUNTIME_DIR}/ca.crt
-        target: /run/roadsense/mqtt/ca.crt
-        read_only: true
-      - type: bind
-        source: ../../config/environments/local/runtime/postgres
-        target: /run/roadsense/postgres
-        read_only: true
-    networks:
-      - roadsense
-    profiles: ["test"]
-    read_only: true
-    tmpfs:
-      - /tmp:rw,noexec,nosuid,size=16m
-    cap_drop:
-      - ALL
-    security_opt:
-      - no-new-privileges:true
 
 networks:
   roadsense:

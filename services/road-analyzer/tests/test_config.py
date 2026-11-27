@@ -21,7 +21,7 @@ BASE_ENV = {
 
 
 class ConfigTests(unittest.TestCase):
-    def test_defaults_are_documented_phase04_rule(self) -> None:
+    def test_default_vibration_threshold_rule(self) -> None:
         with patch.dict(os.environ, BASE_ENV, clear=True):
             config = AnalyzerConfig.from_environment()
         self.assertEqual(config.vibration_rms_threshold_mg, 100.0)

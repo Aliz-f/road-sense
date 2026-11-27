@@ -22,11 +22,18 @@ for service in "${services[@]}"; do
     dockerfile="services/$service/Dockerfile"
   fi
   image="ghcr.io/$owner/road-sense-$service:$version"
+  if [[ $service == mqtt-broker ]]; then
+    target_args=()
+  else
+    target_args=(--target runtime)
+  fi
   if [[ $1 == --plan ]]; then
-    printf 'PLAN: docker buildx build --platform %q -f %q -t %q --push .\n' "$platform" "$dockerfile" "$image"
+    printf 'PLAN: docker buildx build --platform %q' "$platform"
+    printf ' %q' "${target_args[@]}"
+    printf ' -f %q -t %q --push .\n' "$dockerfile" "$image"
   else
     echo "Building and pushing: $image"
-    docker buildx build --platform "$platform" -f "$dockerfile" -t "$image" --push .
+    docker buildx build --platform "$platform" "${target_args[@]}" -f "$dockerfile" -t "$image" --push .
     echo "Inspect and record immutable manifest digest:"
     docker buildx imagetools inspect "$image"
   fi

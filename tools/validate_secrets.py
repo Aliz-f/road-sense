@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate Phase 06 credential byte consistency without printing secrets."""
+"""Validate Rahti credential byte consistency without printing secrets."""
 from __future__ import annotations
 
 import argparse

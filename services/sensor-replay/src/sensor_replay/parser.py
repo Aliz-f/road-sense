@@ -28,7 +28,7 @@ NUMERIC_COLUMNS = EXPECTED_COLUMNS[1:]
 
 
 class SourceDataError(ValueError):
-    """The source archive does not satisfy the verified Phase 00 contract."""
+    """The source archive does not satisfy the verified dataset contract."""
 
 
 def archive_sha256(path: Path) -> str:

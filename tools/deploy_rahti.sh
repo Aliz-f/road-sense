@@ -22,23 +22,23 @@ root=$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 out="${RAHTI_MANIFEST_DIR:-$root/infrastructure/rahti/generated}"
 oc_ns() { oc -n "$RAHTI_NAMESPACE" "$@"; }
 if [[ "$stage" == secrets ]]; then
-  : "${PHASE06_SECRET_DIR:?set path to private generated materials}"
+  : "${RAHTI_SECRET_DIR:?set path to private generated materials}"
   for file in mqtt-password postgres-password password_file ca.crt server.crt server.key; do
-    [[ -s "$PHASE06_SECRET_DIR/$file" ]] || { echo "missing private file: $file" >&2; exit 2; }
+    [[ -s "$RAHTI_SECRET_DIR/$file" ]] || { echo "missing private file: $file" >&2; exit 2; }
   done
-  python3 "$root/tools/phase06_validate_secret_files.py" "$PHASE06_SECRET_DIR"
+  python3 "$root/tools/validate_secrets.py" "$RAHTI_SECRET_DIR"
   oc_ns create secret generic roadsense-mqtt-auth \
     --from-literal=username=roadsense-remote \
-    --from-file=password="$PHASE06_SECRET_DIR/mqtt-password" \
-    --from-file=password_file="$PHASE06_SECRET_DIR/password_file" \
+    --from-file=password="$RAHTI_SECRET_DIR/mqtt-password" \
+    --from-file=password_file="$RAHTI_SECRET_DIR/password_file" \
     --dry-run=client -o yaml | oc_ns apply -f -
   oc_ns create secret generic roadsense-mqtt-tls \
-    --from-file=ca.crt="$PHASE06_SECRET_DIR/ca.crt" \
-    --from-file=server.crt="$PHASE06_SECRET_DIR/server.crt" \
-    --from-file=server.key="$PHASE06_SECRET_DIR/server.key" \
+    --from-file=ca.crt="$RAHTI_SECRET_DIR/ca.crt" \
+    --from-file=server.crt="$RAHTI_SECRET_DIR/server.crt" \
+    --from-file=server.key="$RAHTI_SECRET_DIR/server.key" \
     --dry-run=client -o yaml | oc_ns apply -f -
   oc_ns create secret generic roadsense-postgres-auth \
-    --from-file=password="$PHASE06_SECRET_DIR/postgres-password" \
+    --from-file=password="$RAHTI_SECRET_DIR/postgres-password" \
     --dry-run=client -o yaml | oc_ns apply -f -
   echo "Secret objects created/updated. Secret VALUES were not printed."
   exit 0
@@ -85,4 +85,4 @@ elif [[ "$stage" == apps ]]; then
   oc_ns rollout status deployment/road-analyzer --timeout=180s
   oc_ns rollout status deployment/api --timeout=180s
 fi
-echo "Phase 06 Rahti stage $stage: resources submitted. Verify actual service functionality."
+echo "Rahti Rahti stage $stage: resources submitted. Verify actual service functionality."

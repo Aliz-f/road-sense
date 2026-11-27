@@ -1,73 +1,64 @@
-# Architecture — local laptop + CSC Rahti
+# System architecture and data contract
 
-## Environments
+## Deployment topology
 
-1. **Local Linux laptop:** the complete seven-service application runs with
-   `infrastructure/compose/local.compose.yaml` for development, integration
-   tests and a fully local demonstration.
-2. **CSC Rahti:** Mosquitto, Signal Processor, Road Analyzer, PostgreSQL/PVC and
-   FastAPI run as private OpenShift workloads.
-3. **Distributed demonstration:** the laptop runs only Sensor Replay and
-   Streamlit using the small `rahti-client.compose.yaml` override. Authenticated
-   `oc` sessions forward laptop loopback ports to Rahti ClusterIP Services.
+**Local mode:** all application components live in a single Docker Compose environment. Two private networks separate broker/database traffic from the laptop's HTTP-facing API and dashboard. PostgreSQL, Mosquitto and the processor journal use persistent Docker volumes.
 
-There is no active VPS deployment and no additional Kubernetes cluster.
+**Rahti mode:** Mosquitto, Signal Processor, Road Analyzer, PostgreSQL and FastAPI run as OpenShift Deployments. Rahti provides `ClusterIP` internal Services, restricted security contexts, NetworkPolicies and three persistent volume claims. The laptop runs the Sensor Replay and Streamlit containers; authenticated `oc port-forward` sessions bridge the laptop's ports 18883 and 18000 to Rahti, both bound to `127.0.0.1`.
 
-| Service | Complete local mode | Distributed demo |
+## MQTT contract
+
+| Topic | Producer | Consumer |
 |---|---|---|
-| Sensor Replay | laptop Compose | laptop Compose client |
-| Streamlit | laptop Compose | laptop Compose client |
-| Mosquitto | laptop Compose | Rahti Deployment + PVC |
-| Signal Processor | laptop Compose | Rahti Deployment + PVC |
-| Road Analyzer | laptop Compose | Rahti Deployment |
-| PostgreSQL | laptop Compose volume | Rahti Deployment + PVC |
-| FastAPI | laptop Compose | Rahti Deployment |
+| `roadsense/v1/imu/raw` | Sensor Replay | Signal Processor |
+| `roadsense/v1/imu/run-complete` | Sensor Replay | Signal Processor |
+| `roadsense/v1/imu/features` | Signal Processor | Road Analyzer |
+| `roadsense/v1/events` | Road Analyzer | Optional monitoring |
 
-## Data flows
+The replay preserves source UTC timestamps, assigns a new UUID `run_id` for each run, and supplies monotonic sequence and sample indexes. Raw payloads preserve archive hash and member provenance. MQTT publishes use QoS 1; downstream services treat duplicate delivery as normal.
+
+The processor uses one-second half-open **source-time** windows, anchored at the session's initial sample timestamp. For each acceleration vector `(x,y,z)` in mg:
 
 ```text
-COMPLETE LOCAL
-CSV → Sensor Replay → MQTT/TLS → Processor → MQTT → Analyzer → PostgreSQL
-                                                               ↓
-Browser ← Streamlit ← FastAPI ←─────────────────────────────────┘
-
-DISTRIBUTED DEMO
-LAPTOP                                      CSC RAHTI
-CSV → Sensor Replay → 127.0.0.1:18883 ─oc→ Mosquitto → Processor
-                                               ↑          ↓
-                                               └ features ┘
-                                                     ↓
-                                                  Analyzer → PostgreSQL ← FastAPI
-Browser ← Streamlit ← 127.0.0.1:18000 ───────oc───────────────────────┘
+m = sqrt(x*x + y*y + z*z)
+baseline = median(m values in window)
+d = m - baseline
+vibration_rms_mg = sqrt(mean(d*d))
+peak_deviation_mg = max(abs(d))
 ```
 
-The MQTT forward is still end-to-end TLS at the application layer. Sensor
-Replay verifies a private CA and a server certificate containing `localhost`
-as a DNS SAN, then authenticates with the Rahti broker credential. `oc
-port-forward` adds authenticated OpenShift transport and binds only to
-`127.0.0.1`. The API forward carries HTTP inside that authenticated local
-tunnel; the unauthenticated API is never publicly routed.
+Features include window indexes, original source bounds, the computed baseline, quality flags, algorithm version and original source provenance. The final partial window is emitted after the validated `run-complete` message and all raw batches have arrived.
 
-The Compose override uses host networking for only the two laptop client
-containers so they can reach loopback-bound forwards. It resets their local
-broker/API dependencies and published-port mapping; Streamlit itself still
-listens only on laptop loopback port 8501. The normal Compose file is unchanged and retains
-its private `roadsense` network, browser network, loopback API/dashboard ports,
-named MQTT/PostgreSQL/processor volumes, read-only filesystems and health gates.
+The analyzer writes features and matched events to PostgreSQL. Default event rule: **vibration RMS ≥ 100 mg**, with a fixed rule version and deterministic event IDs. Its transactional outbox supports retrying event publication; the processor uses a SQLite recovery journal. Both consumers handle duplicate deliveries idempotently.
 
-## Reliability and security invariants
+## Database and API
 
-- MQTT topics, payloads and run_id/sequence_id semantics are unchanged.
-- MQTT requires TLS and authentication. TLS verification is never disabled.
-- PostgreSQL is ClusterIP-only and accepted only from API/analyzer/migration Pods.
-- Mosquitto, PostgreSQL and processor state use RWO PVCs; one processor and one
-  analyzer replica preserve stable sessions and deterministic recovery.
-- Analyzer database/outbox commits remain atomic and idempotency keys remain intact.
-- The Rahti private baseline contains no Route, LoadBalancer or NodePort. The
-  broker no longer selects special LoadBalancer nodes.
-- Live Rahti SCC, storage, NetworkPolicy/port-forward behavior, image pulls,
-  persistence and restart recovery remain deployment-time checks.
+PostgreSQL stores `sessions`, `runs`, `feature_windows`, `events`, `heuristic_rules`, `event_outbox` and `schema_migrations`. Application migrations run before analyzer/API startup.
 
-The archived `routes.yaml.tpl`, `mqtt-external.yaml.tpl` and
-`infrastructure/vps` record the abandoned earlier design. Current render/apply
-tools cannot select them.
+Read-only FastAPI endpoints:
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /health/live` | Process liveness |
+| `GET /health/ready` | Database readiness |
+| `GET /api/v1/status` | Aggregate counts and pending outbox |
+| `GET /api/v1/sessions` | Available recordings |
+| `GET /api/v1/runs` | Recorded replay runs |
+| `GET /api/v1/runs/{run_id}/features` | Window measurements |
+| `GET /api/v1/runs/{run_id}/events` | High-vibration events |
+
+Collection endpoints support `limit` and `offset` pagination. Streamlit calls the API to populate the run selector, summary tables and plots.
+
+## Data-quality limitations
+
+The dataset does not establish sensor orientation relative to the vehicle. Magnitude-based vibration deviations are therefore used instead of labeling one axis as the vertical direction. The default 100 mg rule is exploratory: it does **not** validate pothole detection, road condition, road safety or incident severity. The application does not silently interpolate missing or non-monotonic timestamps.
+
+## Security choices
+
+- MQTT requires a username/password and CA-validated TLS.
+- Raw datasets and secrets never enter the Git repository.
+- PostgreSQL has no public listener in either mode.
+- Rahti API and MQTT are internal-only; access from the laptop is via `oc port-forward --address 127.0.0.1`.
+- Secrets and Docker image references are kept separate from source manifests.
+- Container images are pinned by immutable digest for Rahti deployment.
+- Periodic PVC backups are the operator's responsibility; deployment scripts do not back up data.

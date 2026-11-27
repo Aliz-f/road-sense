@@ -1,68 +1,97 @@
-# RoadSense — MUHOS Distributed Vehicle Vibration Monitoring
+# RoadSense
 
-> **PHASE 06 PREPARED, NOT DEPLOYED.** Phases 00–05 run as a complete,
-> tested Docker Compose application on the local Linux laptop. Phase 06 deploys
-> only the backend to CSC Rahti; live Rahti verification still requires approval.
+RoadSense is a distributed vehicle-vibration monitoring application built around the MUHOS inertial measurement unit (IMU) recordings. It replays sensor samples, computes one-second vibration features, identifies threshold-based high-vibration events, and displays results in a dashboard.
 
-RoadSense is a University of Oulu Software Defined Systems course project. It
-replays [MUHOS](https://m3s-kuura.github.io/muhos-dataset/) Bosch IMU data to
-explore vehicle vibration patterns. Results are exploratory metrics, **not
-validated pothole detection or road-safety classifications**.
+The system supports **two independent deployment modes**:
 
-## Deployment architecture
+1. **Fully local:** all seven components run with Docker Compose on one Linux machine.
+2. **CSC Rahti:** Mosquitto, Signal Processor, Road Analyzer, PostgreSQL and FastAPI run as private OpenShift services; Sensor Replay and Streamlit run on the laptop, connected using two loopback-only `oc port-forward` sessions.
 
-| Local Linux laptop — Docker Compose | CSC Rahti — OpenShift/OKD |
-|---|---|
-| Complete seven-service application for development and tests | Mosquitto, Signal Processor, Road Analyzer, PostgreSQL/PVC and FastAPI |
-| Cross-environment demo: Sensor Replay and Streamlit only | Private ClusterIP Services reached through authenticated `oc port-forward` |
+The inferred events indicate **high vibration**, not verified potholes, road defects or safety classifications.
 
-The complete local path is Sensor Replay → authenticated TLS Mosquitto → Signal
-Processor → Road Analyzer → PostgreSQL → FastAPI → Streamlit. For the distributed
-demo, two laptop-loopback forwards carry authenticated MQTT/TLS and private API
-traffic to Rahti. No VPS, public MQTT LoadBalancer, public API Route, external
-DNS, or source-IP allowlist is required.
+## Components and data flow
 
-[Architecture diagram](architecture/road-sense.mmd) ·
-[Architecture explanation](docs/architecture.md) ·
-[Phase 06 deployment guide](docs/phase-06-deployment-guide.md) ·
-[Plan-correction report](docs/phase-06-plan-correction-report.md)
+```text
+MUHOS IMU archive -> Sensor Replay -> MQTT (Mosquitto) -> Signal Processor
+                            |                              |
+                            +---- run-complete message ----+
+                                                           |
+                                               MQTT feature messages
+                                                           |
+                                                    Road Analyzer
+                                                       |       |
+                                                  PostgreSQL  MQTT events
+                                                       |
+                                                    FastAPI
+                                                       |
+                                                    Streamlit
+```
 
-## Course alignment
-
-The official final-project instructions, checked on 2026-11-27, require a
-dockerized, non-monolithic application whose microservices communicate locally
-and with Rahti resources. They do not state a VPS requirement. They also require
-submission material in the course fork's `Final-Project/` directory, an
-architecture image, and an approximately ten-minute recorded demonstration.
-Recheck the [official instructions](https://gitlab.com/sdx-oulu/2024/hw-and-project/-/blob/main/Final-Project/README.md)
-before submission because course material can change.
-
-## Documentation
-
-- [Codex operating instructions](AGENTS.md)
-- [System architecture and network boundaries](docs/architecture.md)
-- [Data, MQTT, database and API contracts](docs/contracts.md)
-- [Operations](docs/operations.md)
-- [Acceptance and submission](docs/acceptance-and-submission.md)
-- [Known risks and open checks](docs/decisions-risks.md)
-
-## Phases
-
-| Phase | Objective | Instructions |
+| Component | Purpose | Technology |
 |---|---|---|
-| 00 | Verify MUHOS files and course rules | [Open](phases/00-scope-data.md) |
-| 01 | Prepare laptop Docker/Compose development | [Open](phases/01-local-foundation.md) |
-| 02 | Replay IMU CSV through authenticated MQTT | [Open](phases/02-replay-mqtt.md) |
-| 03 | Compute source-time vibration features | [Open](phases/03-signal-processing.md) |
-| 04 | Add rules and persistent PostgreSQL storage | [Open](phases/04-analyzer-storage.md) |
-| 05 | Add FastAPI and Streamlit | [Open](phases/05-api-dashboard.md) |
-| 06 | Deploy the private backend to Rahti and demo from laptop | [Open](phases/06-rahti-integration.md) |
-| 07 | Verify, demonstrate, document and submit | [Open](phases/07-final-submission.md) |
+| Sensor Replay | Reads the private MUHOS tar archive, publishes timestamped IMU batches and a completion message | Python / MQTT |
+| Mosquitto | Authenticated TLS MQTT broker with persistence | Mosquitto |
+| Signal Processor | Computes 1-second median-baseline vibration RMS and peak deviations | Python, SQLite recovery journal |
+| Road Analyzer | Applies vibration threshold, writes features/events idempotently and maintains an MQTT event outbox | Python |
+| PostgreSQL | Persists sessions, runs, feature windows and events | PostgreSQL |
+| FastAPI | Exposes read-only status, runs, features and events | Python / FastAPI |
+| Streamlit | Visualizes recorded sessions and processing results | Python / Streamlit |
 
-Raw recordings, credentials, certificate keys and generated deployment files
-must remain outside Git. Images are digest-pinned on Rahti; MQTT remains
-authenticated and TLS-verified; PostgreSQL remains internal.
+## Repository layout
 
-The former personal-VPS plan was abandoned before deployment. Historical Phase
-reports may describe it as the plan at that time; `infrastructure/vps` and the
-optional public-endpoint templates are retained only as inactive history.
+```text
+architecture/
+  system.mmd                  Architecture source diagram
+config/environments/local/
+  .env.example                Private dataset path template
+infrastructure/
+  compose/
+    local.yaml                Full local stack
+    rahti-client.yaml         Laptop-only clients for Rahti mode
+    rahti-client.env.example  Laptop/port-forward settings
+    mosquitto/                Local broker configuration
+  rahti/
+    core.yaml.tpl             PostgreSQL, broker, storage, Services and policies
+    migrate.yaml.tpl          One-shot schema migration Job
+    apps.yaml.tpl             Processor, analyzer and API
+    images.env.example        Immutable image reference template
+    mosquitto/                OpenShift-compatible broker image
+services/
+  sensor-replay/
+  signal-processor/
+  road-analyzer/
+  api/
+  dashboard/
+tools/
+  prepare_local.sh
+  prepare_rahti_secrets.sh
+  validate_secrets.py
+  publish_images.sh
+  render_rahti.py
+  deploy_rahti.sh
+  verify_rahti.sh
+  preflight.sh
+docs/
+  local-deployment.md
+  rahti-deployment.md
+  architecture.md
+  verification.md
+```
+
+Each `services/` directory contains the service source, a Dockerfile, and requirements. Unit tests are retained for important application behavior. The MUHOS archives, generated credentials, container registry tokens and generated Rahti manifests are deliberately **not** included.
+
+## Getting started
+
+- **[Fully local deployment](docs/local-deployment.md)** — prerequisites, dataset, TLS/password setup, Compose, migrations, replay, dashboard, checks and teardown.
+- **[Distributed Rahti deployment](docs/rahti-deployment.md)** — image publishing, private registry access, Rahti Secrets and deployments, laptop tunnels, replay and checks.
+- [Architecture and data contract](docs/architecture.md)
+- [Validation and troubleshooting](docs/verification.md)
+- Architecture source: [Mermaid diagram](architecture/system.mmd)
+
+## Dataset
+
+Download the MUHOS IMU archive from the [MUHOS dataset project](https://m3s-kuura.github.io/muhos-dataset/). The default recording is `Bumpy Gravel - imu.tar`, containing `imu/bosch_imu.csv`. The expected default archive SHA-256 is `91d37ad4de7106d5038ed7bffe1e373db65e0f4771865da8975a216e76ed34f3`. Verify that your archive matches before running the replay. Data remain outside version control.
+
+## Course submission
+
+This repository is the runnable source and documentation. Follow the University's current course instructions for the required GitLab `Final-Project/` submission, architecture image and recorded demonstration. A GitHub repository by itself may not be the required final submission.

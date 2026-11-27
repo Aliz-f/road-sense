@@ -30,11 +30,8 @@ logs/
 .idea/
 config/environments/local/runtime/
 
-# Phase 06 locally rendered deployment files and release environment
+# Rahti generated files and registry image references
 infrastructure/rahti/images.env
 infrastructure/rahti/generated/
 infrastructure/rahti/private/
 infrastructure/compose/rahti-client.env
-infrastructure/vps/.env
-infrastructure/vps/dashboard.env
-infrastructure/vps/sensor-replay.env

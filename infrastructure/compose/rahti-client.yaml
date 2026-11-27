@@ -1,4 +1,4 @@
-# Laptop-side Phase 06 demo clients. Merge this over local.compose.yaml.
+# Laptop-side distributed-mode clients. Merge this over local.yaml.
 # The two oc port-forwards remain bound to laptop loopback; host networking lets
 # these containers reach them without exposing either service publicly.
 services:
