@@ -64,6 +64,11 @@ credential byte consistency, persistent-session/security/PVC safeguards,
 migration repeatability markers, laptop port-forward client isolation, and build-context
 secret exclusions. It does not contact or validate a live Rahti project.
 
+`phase06_ca_permissions.sh` uses safe temporary credentials and Docker to
+verify that generated passwords/private keys remain owner-only while the
+Sensor Replay runtime UID 10001 can read its bind-mounted public CA certificate.
+It prints no credential contents and creates no remote resources.
+
 The Phase 03 end-to-end script also performs the Phase 06 recovery regression:
 it kills the processor during a paced active replay after feature publication,
 waits for journal recovery, and requires 19 exact, contiguous, deduplicated

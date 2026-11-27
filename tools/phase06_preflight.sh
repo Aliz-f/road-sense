@@ -16,11 +16,15 @@ case "${1:-}" in
     oc -n "$RAHTI_NAMESPACE" get resourcequota
     oc -n "$RAHTI_NAMESPACE" get pvc
     oc get storageclass
-    for resource in deployments services persistentvolumeclaims secrets jobs; do
-      printf '%s: ' "$resource"
-      oc -n "$RAHTI_NAMESPACE" auth can-i create "$resource"
+    for resource in deployments services persistentvolumeclaims secrets jobs pods/portforward; do
+      if permission=$(oc -n "$RAHTI_NAMESPACE" auth can-i create "$resource") && [[ $permission == yes ]]; then
+        printf '%s: yes\n' "$resource"
+      else
+        printf '%s: denied (required)\n' "$resource" >&2
+        exit 1
+      fi
     done
-    echo "Confirm storage, quota, image pull access, SCC and private port-forward behavior separately."
+    echo "Confirm storage, quota, image pull access, SCC and actual private port-forward connectivity separately."
     ;;
   *)
     echo "Usage: $0 local|rahti" >&2

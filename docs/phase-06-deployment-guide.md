@@ -23,6 +23,7 @@ From the repository root:
 docker compose --env-file config/environments/local/.env.phase02 \
   -f infrastructure/compose/local.compose.yaml config --quiet
 python3 -m unittest discover -s tests -p 'test_phase06_preparation.py' -v
+./tests/phase06_ca_permissions.sh
 for file in tools/phase06_*.sh; do bash -n "$file"; done
 python3 -m py_compile tools/phase06_render_rahti.py tools/phase06_validate_secret_files.py
 ```
@@ -38,6 +39,8 @@ docker compose \
   -f infrastructure/compose/rahti-client.compose.yaml config --quiet
 ```
 
+The CA check uses Docker and safe temporary credentials to verify Sensor Replay
+UID 10001 can read the same read-only CA bind mount used by the laptop client.
 These checks do not prove Rahti accepts the manifests or that port-forward
 traffic is permitted by the live cluster network.
 
@@ -54,8 +57,10 @@ oc -n "$RAHTI_NAMESPACE" get pods,pvc,deployments,networkpolicies
 Confirm the selected `oc project -q` exactly matches the namespace, and verify
 quota, RWO storage, arbitrary-UID/SCC behavior, seccomp profile, registry pull
 credentials and permissions. Do not install tools or create resources during
-inspection. Recheck CSC documentation immediately before deployment because
-cluster policy changes.
+inspection. The preflight requires `create pods/portforward` in exactly
+`$RAHTI_NAMESPACE`; denial is a blocking result. This authorization check does
+not replace an actual post-deployment connectivity test. Recheck CSC
+documentation immediately before deployment because cluster policy changes.
 
 ## 3. Publish immutable Rahti images — approval required
 
@@ -92,7 +97,9 @@ seen by Sensor Replay through the laptop loopback forward:
 
 The broker certificate contains `DNS:localhost` and `DNS:mqtt-broker`. Sensor
 Replay mounts `ca.crt` and verifies the former; Rahti internal clients verify
-the latter. Keep `ca.key` only on the trusted laptop. Never print or paste the
+the latter. The directory is `0700`; passwords, private keys and certificate
+generation intermediates are `0600`; public `ca.crt` and `server.crt` are
+`0644`. Keep `ca.key` only on the trusted laptop. Never print or paste the
 generated passwords.
 
 ## 5. Render private manifests locally

@@ -28,10 +28,14 @@ external and must be rechecked before submission.
   reaches laptop-loopback forwards through Linux host networking.
 - Kept MQTT authentication and TLS verification. The private demo certificate
   generator now accepts `localhost` and issues both `localhost` and
-  `mqtt-broker` DNS SANs.
+  `mqtt-broker` DNS SANs. Generated passwords and private keys remain `0600`;
+  the public CA and server certificates are `0644` so non-root containers can
+  read their bind mounts while the containing directory remains `0700`.
 - Removed the LoadBalancer-only broker node selector from the private core.
 - Limited active render/apply/preflight/verify tooling to private Rahti stages.
   Archived Route, LoadBalancer and VPS files are visibly marked inactive.
+- Made the read-only Rahti preflight require `create pods/portforward` in the
+  selected namespace and fail clearly when that permission is denied.
 - Limited image publishing to the four images actually deployed on Rahti;
   Sensor Replay and Streamlit remain locally built laptop images.
 - Updated Phase 06, architecture, operations, submission, repository and
@@ -45,6 +49,7 @@ Passed:
 ```sh
 git diff --check
 python3 -m unittest discover -s tests -p 'test_phase06_preparation.py' -v
+./tests/phase06_ca_permissions.sh
 for file in tools/phase06_*.sh; do bash -n "$file"; done
 python3 -m py_compile tools/phase06_render_rahti.py tools/phase06_validate_secret_files.py
 docker compose --env-file config/environments/local/.env.phase02 \
@@ -58,27 +63,35 @@ python3 tools/phase06_render_rahti.py \
   --output-dir /tmp/roadsense-phase06-rendered
 ```
 
-The preparation suite passed 9 tests in its first run; after the final active
-tooling assertion it passed 10 tests. Merged-Compose assertions confirmed both
+The updated preparation suite passed 12/12 tests. Its simulated `oc` regression
+proved a denied `pods/portforward` permission stops preflight. The Docker CA
+permission regression generated temporary credentials, confirmed private
+files stayed `0600`, built the Sensor Replay runtime image, and confirmed UID
+10001 could read the `0644` CA bind mount. Merged-Compose assertions confirmed both
 clients use host networking, have no local backend dependency, target
 `localhost:18883`/`localhost:18000`, and publish no Compose dashboard port
 mapping in host mode; the override binds Streamlit itself to `127.0.0.1:8501`.
 Render assertions confirmed exactly three manifests and
 no Route, LoadBalancer, NodePort, LoadBalancer selector or unresolved variable.
 
-Partially passed:
+Passed in an isolated checkout of commit `05492ac` (the PR branch before these
+script/test/documentation-only fixes):
 
 ```sh
 ./tests/phase05_e2e.sh
 ```
 
-The first sandboxed attempt could not access the local Docker socket. The
-approved local-Docker rerun built the images, passed all 11 API tests and 6 of 7
-dashboard tests, then stopped. The failing assertion required the dashboard's
-methodology warning. A pre-existing, uncommitted user change in
-`services/dashboard/src/roadsense_dashboard/app.py` comments out
-`st.warning(LIMITATION)`. This correction neither changes nor stages that file.
-The full cross-service portion therefore did not execute in this worktree.
+The clean committed dashboard passed 7/7 tests, including the methodology
+warning, while API tests passed 11/11. This confirms the earlier dashboard
+failure came only from the pre-existing uncommitted user edit in the primary
+worktree; this correction neither changes nor stages that file. The first full
+clean-stack attempts then stopped because Compose deliberately reused the
+existing fixed-name PostgreSQL volume. A rerun with only the three named Docker
+volumes changed to disposable test names passed the complete test: credential
+rotation and recovery, two 1,536-sample replays, 19 feature windows per run,
+five/zero events, API and Plotly/dashboard checks, API outage recovery, service
+health, and loopback publication checks. No application behavior was changed
+for that isolation.
 
 Not verified:
 

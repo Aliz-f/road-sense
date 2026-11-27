@@ -60,7 +60,10 @@ docker run --rm --user "$(id -u):$(id -g)" --entrypoint mosquitto_passwd \
   -v "$(realpath "$dir"):/secrets:rw" \
   eclipse-mosquitto:2.0.22@sha256:81a6193ae693942a3231cd3ac52875b02b7e3a19da671b2fb4b55cc874c5b279 \
   -U /secrets/password_file >/dev/null
-chmod 600 "$dir"/* || true
+# Keep private material owner-only. The certificates contain no secrets and
+# must be readable by the non-root application users through bind mounts.
+chmod 600 "$dir"/*
+chmod 644 "$dir/ca.crt" "$dir/server.crt"
 openssl verify -CAfile "$dir/ca.crt" "$dir/server.crt" >/dev/null
 python3 "$(dirname "$0")/phase06_validate_secret_files.py" "$dir" >/dev/null
 echo "Generated private demo materials locally: $dir"

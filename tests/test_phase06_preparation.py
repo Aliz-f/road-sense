@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import importlib.util
+import os
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -179,6 +181,37 @@ class Phase06RenderTests(unittest.TestCase):
         self.assertIn("**/*.env", patterns)
         git_patterns = (ROOT / ".gitignore").read_text()
         self.assertIn("infrastructure/compose/rahti-client.env", git_patterns)
+
+    def test_generated_public_certificates_have_runtime_read_permissions(self):
+        generator = (ROOT / "tools" / "phase06_prepare_secrets.sh").read_text()
+        self.assertIn('chmod 600 "$dir"/*', generator)
+        self.assertIn('chmod 644 "$dir/ca.crt" "$dir/server.crt"', generator)
+
+    def test_rahti_preflight_requires_port_forward_permission(self):
+        with tempfile.TemporaryDirectory() as temp:
+            executable = Path(temp) / "oc"
+            executable.write_text(
+                "#!/bin/sh\n"
+                "if [ \"$1\" = project ]; then echo test-project; exit 0; fi\n"
+                "case \"$*\" in\n"
+                "  *'auth can-i create pods/portforward') echo no; exit 1 ;;\n"
+                "  *'auth can-i create '*) echo yes; exit 0 ;;\n"
+                "  *) exit 0 ;;\n"
+                "esac\n"
+            )
+            executable.chmod(0o755)
+            environment = os.environ.copy()
+            environment["PATH"] = f"{temp}:{environment['PATH']}"
+            environment["RAHTI_NAMESPACE"] = "expected-namespace"
+            result = subprocess.run(
+                ["bash", str(ROOT / "tools" / "phase06_preflight.sh"), "rahti"],
+                check=False,
+                capture_output=True,
+                text=True,
+                env=environment,
+            )
+            self.assertNotEqual(0, result.returncode)
+            self.assertIn("pods/portforward: denied (required)", result.stderr)
 
 
 if __name__ == "__main__":
