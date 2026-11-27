@@ -164,10 +164,6 @@ spec:
     metadata:
       labels: {app: roadsense-mqtt-broker}
     spec:
-      # Required by CSC when externalTrafficPolicy=Local is used for the
-      # separately approved MQTT LoadBalancer Service.
-      nodeSelector:
-        rahti.csc.fi/local-load-balancer: ""
       initContainers:
         - name: verify-mqtt-persistence-writable
           image: ${BROKER_IMAGE}

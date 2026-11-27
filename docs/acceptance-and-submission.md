@@ -1,22 +1,37 @@
 # Validation, demo and course submission
 
-## Local development gate
-- The complete application must run on the laptop using Docker Compose before deployment.
-- Local laptop evidence includes all seven services, integration tests and data in the dashboard without requiring VPS or Rahti.
+## Acceptance
 
-## End-to-end acceptance
-- Verified real CSV fields/time/units, sample count, and dataset citation.
-- Replay on VPS emits topic batches with stable session_id, unique run_id, sequence and source timestamps.
-- MQTT broker receives authenticated messages and forwards to Rahti processor.
-- Numeric RMS and peak calculations tested against known synthetic signals.
-- Analyzer creates versioned events and persists rows; reprocessing identical window stays idempotent.
-- FastAPI lists runs, features and events; dashboard charts recorded values and clearly states this is not validated pothole detection.
-- Rahti Pods/Services/Routes/PVC healthy; cross-environment trace from VPS to Rahti and back.
-- Restart/reconnect and recovery tests documented.
-- No raw datasets, tokens, credentials or unprotected public DB endpoints.
+- The complete seven-service application passes locally with Docker Compose.
+- Real CSV provenance, fields, units and source timestamps remain verified.
+- Sensor Replay uses stable session_id, unique run_id and monotonic sequence IDs.
+- Laptop-to-Rahti MQTT uses authenticated, CA-verified TLS through a
+  loopback-only authenticated `oc port-forward`.
+- Processor calculations, analyzer idempotency/outbox, database persistence,
+  API contracts and dashboard features remain unchanged and tested.
+- Rahti Pods, private Services and PVCs become healthy without a Route,
+  LoadBalancer, NodePort or external database.
+- A real run_id is visible from laptop replay through Rahti processing/storage
+  and back to laptop Streamlit through the private API forward.
+- Broker, processor and PostgreSQL restart/persistence evidence is recorded.
+- No raw dataset, token, credential, key or generated Secret enters Git.
 
-## Proposed demonstration under ten minutes
-0–1: introduction & goal. 1–2: laptop-first development plus deployment diagram. 2–3: show laptop Compose test results then VPS Docker Compose feeder. 3–5: Rahti Pods/MQTT processing. 5–7: API, database and dashboard. 7–8.5: compare two sessions and discuss speed. 8.5–9.5: reconnect/duplicate or failure recovery. 9.5–10: recap. Recheck exact current video/audio/camera rules directly in the course README.
+## Demonstration under ten minutes
 
-## Course submission
-GitHub road-sense = working repository. Verify whether official course submission requires copying to GitLab fork under Final-Project/, architecture image arch.png, open-source.url, video-demonstration.url, deadlines, and camera/mic use. Never assume a GitHub repo link alone satisfies the official submission. Cite MUHOS and original research under its verified license. Keep a sanitized evidence report.
+Show the local Compose architecture and test evidence, then Rahti private
+workloads/PVCs, the two loopback forwards, a laptop replay, the resulting API
+data/dashboard and one recovery/idempotency safeguard. Clearly state the
+exploratory-vibration limitation.
+
+The official instructions checked on 2026-11-27 require a recorded demo of
+about ten minutes with microphone and camera, introduction, project explanation
+and step-by-step working commands. Recheck the current course README before
+recording; do not rely on this summary if it changes.
+
+## Submission
+
+GitHub remains the development source. The official course repository requires
+material in the student's private GitLab fork under `Final-Project/`, including
+source/material, an architecture image and the demonstration link. Determine
+the cleanest permitted way to reference or include this repository, then commit
+and push the required course-fork changes. A GitHub PR alone is not submission.

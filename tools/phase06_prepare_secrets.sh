@@ -2,13 +2,13 @@
 # Generates development/demo TLS and credentials LOCALLY only; never creates Rahti Secrets.
 set -euo pipefail
 if [[ ${1:-} != "--local-only" || $# != 3 ]]; then
-  echo "Usage: $0 --local-only MQTT_PUBLIC_DNS_HOST PRIVATE_OUTPUT_DIR" >&2
+  echo "Usage: $0 --local-only MQTT_CLIENT_TLS_HOST PRIVATE_OUTPUT_DIR" >&2
   exit 2
 fi
 host=$2
 dir=$3
-if [[ ! $host =~ ^[a-zA-Z0-9.-]+$ || $host != *.* ]]; then
-  echo "Specify the real DNS hostname of the planned MQTT TLS endpoint" >&2
+if [[ ! $host =~ ^[a-zA-Z0-9.-]+$ ]]; then
+  echo "Specify the DNS hostname clients use for MQTT TLS verification" >&2
   exit 2
 fi
 for command in openssl python3 docker; do command -v "$command" >/dev/null || { echo "missing $command" >&2; exit 1; }; done
@@ -64,4 +64,4 @@ chmod 600 "$dir"/* || true
 openssl verify -CAfile "$dir/ca.crt" "$dir/server.crt" >/dev/null
 python3 "$(dirname "$0")/phase06_validate_secret_files.py" "$dir" >/dev/null
 echo "Generated private demo materials locally: $dir"
-echo "Never commit files or copy ca.key to VPS/Rahti."
+echo "Never commit files or copy ca.key to Rahti."

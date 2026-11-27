@@ -59,9 +59,9 @@ See `../docs/phase-05-report.md` for actual output, startup commands, and
 remaining limitations.
 
 `test_phase06_preparation.py` is offline-only. It renders and structurally checks all
-private Rahti manifests, checks immutable images and route inputs, verifies
+private Rahti manifests, checks immutable images and private-only rendering, verifies
 credential byte consistency, persistent-session/security/PVC safeguards,
-migration repeatability markers, VPS credential separation, and build-context
+migration repeatability markers, laptop port-forward client isolation, and build-context
 secret exclusions. It does not contact or validate a live Rahti project.
 
 The Phase 03 end-to-end script also performs the Phase 06 recovery regression:

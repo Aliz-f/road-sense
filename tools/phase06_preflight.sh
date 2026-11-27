@@ -16,24 +16,14 @@ case "${1:-}" in
     oc -n "$RAHTI_NAMESPACE" get resourcequota
     oc -n "$RAHTI_NAMESPACE" get pvc
     oc get storageclass
-    for resource in deployments services routes persistentvolumeclaims secrets jobs; do
+    for resource in deployments services persistentvolumeclaims secrets jobs; do
       printf '%s: ' "$resource"
       oc -n "$RAHTI_NAMESPACE" auth can-i create "$resource"
     done
-    echo "Confirm storage, quota, routes/TLS, image pull access and SCC separately."
-    ;;
-  vps)
-    uname -m
-    cat /etc/os-release
-    nproc
-    free -h
-    df -h /
-    docker version
-    docker compose version
-    echo "Read-only VPS inspection complete."
+    echo "Confirm storage, quota, image pull access, SCC and private port-forward behavior separately."
     ;;
   *)
-    echo "Usage: $0 local|rahti|vps" >&2
+    echo "Usage: $0 local|rahti" >&2
     exit 2
     ;;
 esac

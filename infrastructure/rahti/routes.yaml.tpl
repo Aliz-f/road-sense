@@ -1,4 +1,4 @@
-# OPTIONAL HTTPS API ACCESS — NEVER APPLY WITHOUT EXPLICIT APPROVAL.
+# HISTORICAL VPS-ERA OPTION — not rendered or applied by current tooling.
 # The API is not authenticated: the ingress allowlist is a required mitigation,
 # and must be VERIFIED end-to-end or replaced by approved VPN/authenticated proxy.
 apiVersion: route.openshift.io/v1

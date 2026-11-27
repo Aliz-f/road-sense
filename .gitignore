@@ -34,6 +34,7 @@ config/environments/local/runtime/
 infrastructure/rahti/images.env
 infrastructure/rahti/generated/
 infrastructure/rahti/private/
+infrastructure/compose/rahti-client.env
 infrastructure/vps/.env
 infrastructure/vps/dashboard.env
 infrastructure/vps/sensor-replay.env

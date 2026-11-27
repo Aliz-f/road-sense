@@ -1,38 +1,53 @@
-# Phase 06 — Publish Docker images and deploy across personal VPS + CSC Rahti
-
-**Status:** Deployment files and learning runbook prepared in `phase/06-deployment-prep`. No remote deployment has been performed; exit checklist is still open.
+# Phase 06 — Deploy the backend to CSC Rahti and demonstrate from the laptop
 
 ## Goal
-Take the tested **local laptop** application and deploy it into the intended **two remote environments**: personal VPS and Rahti.
 
-## Inputs
-Passed laptop end-to-end Phase 05; approved Docker registry; personal VPS specs and access; CSC Rahti namespace/quota/credentials; approval for remote changes.
+Keep the verified complete laptop Compose application, deploy its backend to
+CSC Rahti, and demonstrate laptop Sensor Replay and Streamlit communicating
+with private Rahti Services through authenticated loopback port-forwards.
 
-## Instructions
-1. Ensure local Compose integration tests passed and document versioned release images/digests.
-2. Build/push versioned images to approved registry; separate configuration from images.
-3. Inventory, secure and prepare personal VPS with Docker Engine/Compose and restricted MUHOS dataset volume (with owner approval).
-4. Deploy **only** sensor-replay and dashboard to VPS using Docker Compose; keep it initially private/guarded.
-5. Inspect Rahti namespace, quotas, PVC classes, HTTPS Route support, and CSC
-   approval/assignment for a raw-TCP LoadBalancer ingress IP.
-6. Deploy Mosquitto, signal-processor, road-analyzer, PostgreSQL/PVC and FastAPI to Rahti with resource limits, probes, private DB and controlled external endpoints.
-7. Point VPS feeder to Rahti broker via authenticated MQTT/TLS; dashboard to Rahti API via HTTPS. Do not expose database publicly.
-8. Run and record full real-data trace VPS CSV → Rahti broker → processor → analyzer → database → API → VPS dashboard.
-9. Test restart, replay duplicate handling, persistence, secure access, recovery and rollback.
+## Prerequisites
 
-Deployment preparation and step-by-step commands: [Phase 06 deployment guide](../docs/phase-06-deployment-guide.md).
+- Phase 05 local end-to-end checks pass.
+- Existing Rahti namespace and authenticated `oc` access.
+- Verified project quota, SCC, storage class and registry image-pull access.
+- Approved registry plus immutable backend/PostgreSQL image digests.
+- Explicit approval before image publishing, secret creation or Rahti changes.
+
+## Tasks
+
+1. Re-run local Compose validation and affected integration checks.
+2. Inspect Rahti capabilities without changing the project.
+3. Build and publish only the four Rahti application images after approval.
+4. Generate protected MQTT TLS/authentication and PostgreSQL credentials
+   locally; use a broker certificate with `DNS:localhost` for the demo forward.
+5. Render and review private core, migration and application manifests.
+6. Deploy Secrets, core, migration and apps in guarded order after approval.
+7. Start loopback-only MQTT/API `oc port-forward` sessions on the laptop.
+8. Run existing Sensor Replay and Streamlit Compose services with the
+   `rahti-client.compose.yaml` override.
+9. Record a run_id trace, persistence/restart evidence and sanitized logs.
+
+Do not deploy a VPS, public Route, LoadBalancer, NodePort, external DNS, gateway
+or additional Kubernetes cluster. Do not change processing algorithms,
+contracts, database schema, dashboard behavior or recovery semantics.
 
 ## Deliverables
-Versioned published images, `infrastructure/vps` and `infrastructure/rahti` deployment instructions/manifests, VPS Compose, settings templates, approved remote configuration, test evidence and rollback guide.
 
-## Exit checklist
-- [ ] Whole app passed local Compose tests before promotion.
-- [ ] VPS runs feeder + dashboard, with credentials and data protected.
-- [ ] Rahti runs broker, processor, analyzer, DB and API in healthy Pods.
-- [ ] MQTT/TLS and HTTPS cross-environment connections verified.
-- [ ] Database persists; no secrets/public DB exposure.
-- [ ] Full end-to-end remote flow demonstrated.
-- [ ] Owner approval recorded for remote changes; rollback documented.
+Private Rahti manifests, immutable image settings, guarded deployment scripts,
+laptop client override, exact commands, sanitized evidence and rollback notes.
 
-## Codex request
-Implement **only Phase 06**. Promote my already-tested **laptop** application onto **my own VPS** (sensor feeder + dashboard) and **CSC Rahti** (backend). Require approval before changing remote infrastructure. Test end-to-end and stop before Phase 07.
+## Acceptance criteria
+
+- [x] Complete local Compose path remains available and configuration validates.
+- [x] Active Rahti templates contain private Services/PVCs and no public resource.
+- [x] Broker has no LoadBalancer-specific node selector.
+- [x] Active tools cannot render/apply the abandoned public/VPS path.
+- [x] Laptop demo configuration uses loopback `oc port-forward`, MQTT auth and TLS verification.
+- [ ] Real Rahti Pods, PVCs, SCC behavior, image pulls and migrations verified.
+- [ ] Laptop-to-Rahti replay/API/dashboard trace verified with a real run_id.
+- [ ] PostgreSQL, broker session and processor journal persistence verified after controlled restarts.
+- [ ] Sanitized live implementation report completed.
+
+Repository preparation does not satisfy the unchecked live criteria. Stop
+before Phase 07.

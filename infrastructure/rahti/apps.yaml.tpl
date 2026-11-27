@@ -174,8 +174,9 @@ spec:
     - {name: http, port: 8000, targetPort: http}
 
 ---
-# Fail closed against direct cross-project access to the unauthenticated API.
-# VERIFY Rahti router namespaces carry this label before using an external Route.
+# Keep the unauthenticated API reachable only from this namespace through the
+# cluster network. Laptop access uses authenticated oc port-forward and must be
+# verified on the live Rahti network before deployment is called complete.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -186,8 +187,6 @@ spec:
   policyTypes: [Ingress]
   ingress:
     - from:
-        - namespaceSelector:
-            matchLabels:
-              policy-group.network.openshift.io/ingress: ""
+        - podSelector: {}
       ports:
         - {protocol: TCP, port: 8000}
