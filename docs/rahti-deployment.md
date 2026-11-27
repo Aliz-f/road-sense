@@ -131,7 +131,7 @@ The migration Job must complete before applying the application workloads. The m
 
 Expected after rollout: `postgres`, `mqtt-broker`, `signal-processor`, `road-analyzer`, `api` each show `1/1` ready. Three persistent claims (PostgreSQL 5Gi, MQTT 1Gi, processor state 1Gi) should be bound.
 
-**Existing deployment caution:** this standalone distribution gives its initial migration the neutral filename `0002_reliability.sql`. It is intended for a **fresh database**; do not point it at an existing installation created using the historical `0002_phase04_reliability.sql` without carefully reconciling migration records and checksums. Never delete an existing database or PVC just to make a renamed migration pass.
+**Existing deployment caution:** this standalone distribution is intended for a **fresh PostgreSQL database**. If you reuse a database created by an earlier release whose migration filenames differ, reconcile migration records and checksums before deployment. Never delete an existing database or PVC just to make a renamed migration pass.
 
 ## 7. Start the laptop's two private tunnels
 
