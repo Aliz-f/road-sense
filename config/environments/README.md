@@ -6,9 +6,11 @@ are ignored by Git. Run `../../tools/prepare_phase02_local.sh` rather than
 committing credentials. Every `.env` file is ignored by Git; `.env.example`
 files contain no secrets.
 
-The `vps` inventory points to separate Compose, dashboard, and replay examples
-under `infrastructure/vps`; this prevents MQTT credentials from entering the
-dashboard container. The `rahti` example is a variable-name inventory.
-They do not authorize remote access, deployment, or secret creation.
+The `rahti` example is a variable-name inventory for in-cluster workloads.
+Phase 06 laptop clients use the protected, ignored
+`infrastructure/compose/rahti-client.env` described by its committed example.
+The `vps` inventory is abandoned historical material and is not in the active
+deployment path. None of these files authorizes remote access, deployment, or
+secret creation.
 
 Never commit credentials, certificates, private endpoints, or dataset files.

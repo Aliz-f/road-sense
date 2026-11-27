@@ -1,6 +1,6 @@
 # RoadSense dashboard
 
-**Status: Phase 05 implemented and verified locally. No VPS deployment exists.**
+**Status: Phase 05 implemented and verified locally.**
 
 The Streamlit/Plotly dashboard selects recordings and runs, charts RMS and peak
 deviation against source UTC time, overlays exploratory threshold events, and
@@ -14,5 +14,6 @@ docker compose --env-file config/environments/local/.env.phase02 \
   -f infrastructure/compose/local.compose.yaml run --rm --no-deps dashboard-smoke-tests
 ```
 
-See `../../docs/phase-05-report.md`. Phase 06 may deploy this tested image to
-the VPS only after explicit approval.
+See `../../docs/phase-05-report.md`. In the Phase 06 distributed demo, this
+same laptop container reaches private Rahti FastAPI through a loopback-only
+`oc port-forward`; it is not deployed to Rahti or a VPS.

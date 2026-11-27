@@ -1,0 +1,28 @@
+# Laptop-side Phase 06 demo clients. Merge this over local.compose.yaml.
+# The two oc port-forwards remain bound to laptop loopback; host networking lets
+# these containers reach them without exposing either service publicly.
+services:
+  sensor-replay:
+    network_mode: host
+    networks: !reset []
+    depends_on: !reset {}
+    environment:
+      MQTT_HOST: localhost
+      MQTT_PORT: ${RAHTI_MQTT_FORWARD_PORT:-18883}
+      MQTT_USERNAME: ${RAHTI_MQTT_USERNAME:?set the Rahti MQTT username}
+      MQTT_PASSWORD: ${RAHTI_MQTT_PASSWORD:?set the Rahti MQTT password}
+
+  dashboard:
+    network_mode: host
+    networks: !reset []
+    depends_on: !reset {}
+    ports: !reset []
+    entrypoint:
+      - streamlit
+      - run
+      - src/roadsense_dashboard/app.py
+      - --server.address=127.0.0.1
+      - --server.port=8501
+      - --server.headless=true
+    environment:
+      API_INTERNAL_URL: http://localhost:${RAHTI_API_FORWARD_PORT:-18000}

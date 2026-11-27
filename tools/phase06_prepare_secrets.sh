@@ -2,13 +2,13 @@
 # Generates development/demo TLS and credentials LOCALLY only; never creates Rahti Secrets.
 set -euo pipefail
 if [[ ${1:-} != "--local-only" || $# != 3 ]]; then
-  echo "Usage: $0 --local-only MQTT_PUBLIC_DNS_HOST PRIVATE_OUTPUT_DIR" >&2
+  echo "Usage: $0 --local-only MQTT_CLIENT_TLS_HOST PRIVATE_OUTPUT_DIR" >&2
   exit 2
 fi
 host=$2
 dir=$3
-if [[ ! $host =~ ^[a-zA-Z0-9.-]+$ || $host != *.* ]]; then
-  echo "Specify the real DNS hostname of the planned MQTT TLS endpoint" >&2
+if [[ ! $host =~ ^[a-zA-Z0-9.-]+$ ]]; then
+  echo "Specify the DNS hostname clients use for MQTT TLS verification" >&2
   exit 2
 fi
 for command in openssl python3 docker; do command -v "$command" >/dev/null || { echo "missing $command" >&2; exit 1; }; done
@@ -60,8 +60,11 @@ docker run --rm --user "$(id -u):$(id -g)" --entrypoint mosquitto_passwd \
   -v "$(realpath "$dir"):/secrets:rw" \
   eclipse-mosquitto:2.0.22@sha256:81a6193ae693942a3231cd3ac52875b02b7e3a19da671b2fb4b55cc874c5b279 \
   -U /secrets/password_file >/dev/null
-chmod 600 "$dir"/* || true
+# Keep private material owner-only. The certificates contain no secrets and
+# must be readable by the non-root application users through bind mounts.
+chmod 600 "$dir"/*
+chmod 644 "$dir/ca.crt" "$dir/server.crt"
 openssl verify -CAfile "$dir/ca.crt" "$dir/server.crt" >/dev/null
 python3 "$(dirname "$0")/phase06_validate_secret_files.py" "$dir" >/dev/null
 echo "Generated private demo materials locally: $dir"
-echo "Never commit files or copy ca.key to VPS/Rahti."
+echo "Never commit files or copy ca.key to Rahti."

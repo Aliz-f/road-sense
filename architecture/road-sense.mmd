@@ -1,48 +1,31 @@
 flowchart TB
-  subgraph LAPTOP["PHASES 00–05: LOCAL LAPTOP — Docker Compose"]
-    LD["Private MUHOS CSV files"]
-    LF["sensor-replay"]
-    LM["Mosquitto"]
-    LMQ[("Persistent MQTT sessions")]
-    LP["signal-processor"]
-    LA["road-analyzer"]
-    LDB[("PostgreSQL")]
-    LAPI["FastAPI"]
-    LUI["Streamlit"]
-    LD --> LF
-    LF -->|"raw + run-complete"| LM
-    LM -->|"raw + run-complete"| LP
-    LP -->|"features via MQTT"| LM
-    LM -->|"feature topic"| LA
-    LM --> LMQ
-    LA -->|"events via MQTT QoS 1"| LM
-    LA -->|"sessions, runs, features, events + outbox"| LDB
-    LDB --> LAPI --> LUI
+  subgraph LAPTOP_LOCAL["LOCAL LAPTOP — complete Docker Compose"]
+    LD["Private MUHOS CSV"] --> LF["Sensor Replay"]
+    LF -->|"raw + run-complete / MQTT TLS"| LM["Mosquitto"]
+    LM --> LP["Signal Processor"]
+    LP -->|"features"| LM
+    LM --> LA["Road Analyzer"]
+    LA --> LDB[("PostgreSQL")]
+    LDB --> LAPI["FastAPI"] --> LUI["Streamlit"] --> LB["Browser"]
   end
 
-  subgraph VPS["PHASE 06: PERSONAL VPS — Docker Compose"]
-    VD["Private MUHOS CSV"]
-    VF["sensor-replay"]
-    VUI["Streamlit dashboard"]
-    VD --> VF
-  end
-  subgraph RAHTI["PHASE 06: CSC RAHTI — Kubernetes/OpenShift"]
-    RMT["MQTT TLS endpoint"]
-    RM["Mosquitto"]
-    RP["signal-processor"]
-    RA["road-analyzer"]
-    RDB[("PostgreSQL with PVC")]
-    RAPI["FastAPI"]
-    RHT["HTTPS API endpoint"]
-    RMT --> RM
-    RM -->|"raw + run-complete"| RP
-    RP -->|"features via broker"| RM
-    RM -->|"features"| RA
-    RA --> RDB --> RAPI --> RHT
+  subgraph LAPTOP_DEMO["LAPTOP — distributed demo clients"]
+    DD["Private MUHOS CSV"] --> DF["Sensor Replay"]
+    DUI["Streamlit"] --> DB["Browser"]
+    MF["127.0.0.1:18883\noc port-forward"]
+    AF["127.0.0.1:18000\noc port-forward"]
+    DF -->|"authenticated MQTT/TLS"| MF
+    AF -->|"private HTTP"| DUI
   end
 
-  LAPTOP -.->|"after local tests: build, push images & deploy"| VPS
-  LAPTOP -.->|"after local tests: build, push images & deploy"| RAHTI
-  VF -->|"authenticated MQTT/TLS"| RMT
-  VUI -->|"HTTPS"| RHT
-  USER["User browser"] -->|"VPN or secured HTTPS"| VUI
+  subgraph RAHTI["CSC RAHTI — OpenShift private backend"]
+    RM["Mosquitto ClusterIP + PVC"] --> RP["Signal Processor + PVC"]
+    RP -->|"features"| RM
+    RM --> RA["Road Analyzer"]
+    RA --> RDB[("PostgreSQL + PVC")]
+    RDB --> RAPI["FastAPI ClusterIP"]
+  end
+
+  MF -.->|"authenticated oc session"| RM
+  RAPI -.->|"authenticated oc session"| AF
+  LAPTOP_LOCAL -.->|"tested images + guarded oc deploy"| RAHTI

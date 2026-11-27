@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import importlib.util
+import os
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -70,59 +72,6 @@ class Phase06RenderTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "unsupported setting"):
                 module.load_settings(values)
 
-    def test_api_route_and_mqtt_loadbalancer_are_separate_and_guarded(self):
-        with tempfile.TemporaryDirectory() as temp:
-            options = self.settings() | {
-                "API_PUBLIC_HOST": "api.example.org",
-                "VPS_EGRESS_CIDR": "198.51.100.5/32",
-            }
-            output = Path(temp) / "routes.yaml"
-            module.render(
-                ROOT / "infrastructure" / "rahti" / "routes.yaml.tpl",
-                output,
-                options,
-                module.API_ROUTE_KEYS,
-            )
-            content = output.read_text()
-            self.assertNotIn("roadsense-mqtt", content)
-            self.assertNotIn("passthrough", content)
-            self.assertIn("198.51.100.5/32", content)
-            mqtt_output = Path(temp) / "mqtt-external.yaml"
-            module.render(
-                ROOT / "infrastructure" / "rahti" / "mqtt-external.yaml.tpl",
-                mqtt_output,
-                options,
-                module.MQTT_EXTERNAL_KEYS,
-            )
-            mqtt = mqtt_output.read_text()
-            self.assertIn("type: LoadBalancer", mqtt)
-            self.assertIn("allocateLoadBalancerNodePorts: false", mqtt)
-            self.assertIn("externalTrafficPolicy: Local", mqtt)
-            self.assertIn("port: 30883", mqtt)
-            self.assertNotIn("kind: Route", mqtt)
-            options["VPS_EGRESS_CIDR"] = ""
-            with self.assertRaisesRegex(ValueError, "required"):
-                module.render(
-                    ROOT / "infrastructure" / "rahti" / "routes.yaml.tpl",
-                    output,
-                    options,
-                    module.API_ROUTE_KEYS,
-                )
-
-    def test_cidr_rejects_invalid_octets_and_noncanonical_network(self):
-        options = self.settings() | {
-            "API_PUBLIC_HOST": "api.example.org",
-            "VPS_EGRESS_CIDR": "999.51.100.5/32",
-        }
-        with tempfile.TemporaryDirectory() as temp:
-            with self.assertRaisesRegex(ValueError, "canonical IPv4"):
-                module.render(
-                    ROOT / "infrastructure" / "rahti" / "routes.yaml.tpl",
-                    Path(temp) / "routes.yaml",
-                    options,
-                    module.API_ROUTE_KEYS,
-                )
-
     def test_rahti_security_persistence_and_migration_controls_are_rendered(self):
         with tempfile.TemporaryDirectory() as temp:
             destination = Path(temp)
@@ -140,7 +89,7 @@ class Phase06RenderTests(unittest.TestCase):
             self.assertIn("signal_processor.health", rendered)
             self.assertIn("roadsense-processor-state", rendered)
             self.assertIn("PROCESSOR_REJECTED_TOMBSTONE_LIMIT", rendered)
-            self.assertIn('rahti.csc.fi/local-load-balancer: ""', rendered)
+            self.assertNotIn("local-load-balancer", rendered)
             migrate = (destination / "migrate.yaml").read_text()
             self.assertIn("generateName: roadsense-migrate-", migrate)
             self.assertIn("roadsense.io/migration-id:", migrate)
@@ -188,14 +137,33 @@ class Phase06RenderTests(unittest.TestCase):
         self.assertIn("secretKeyRef: {name: roadsense-postgres-auth, key: password}", core)
         self.assertGreaterEqual((apps + migrate).count("{key: password, path: password}"), 3)
 
-    def test_vps_dashboard_does_not_receive_replay_credentials(self):
-        compose = (ROOT / "infrastructure" / "vps" / "compose.yaml").read_text()
-        dashboard = (ROOT / "infrastructure" / "vps" / "dashboard.env.example").read_text()
-        replay = (ROOT / "infrastructure" / "vps" / "sensor-replay.env.example").read_text()
-        self.assertIn("dashboard.env", compose)
-        self.assertIn("sensor-replay.env", compose)
-        self.assertNotIn("MQTT_PASSWORD", dashboard)
-        self.assertNotIn("API_INTERNAL_URL", replay)
+    def test_laptop_clients_use_loopback_port_forwards_without_dependencies(self):
+        override = (
+            ROOT / "infrastructure" / "compose" / "rahti-client.compose.yaml"
+        ).read_text()
+        self.assertIn("network_mode: host", override)
+        self.assertIn("MQTT_HOST: localhost", override)
+        self.assertIn("API_INTERNAL_URL: http://localhost:", override)
+        self.assertIn("depends_on: !reset {}", override)
+        self.assertIn("--server.address=127.0.0.1", override)
+        self.assertNotIn("LoadBalancer", override)
+        self.assertNotIn("kind: Route", override)
+
+    def test_vps_external_settings_are_not_accepted_by_active_renderer(self):
+        with tempfile.TemporaryDirectory() as temp:
+            values = Path(temp) / "images.env"
+            values.write_text("VPS_EGRESS_CIDR=198.51.100.5/32\n")
+            with self.assertRaisesRegex(ValueError, "unsupported setting"):
+                module.load_settings(values)
+
+    def test_active_tooling_has_no_public_or_vps_stage(self):
+        renderer = (ROOT / "tools" / "phase06_render_rahti.py").read_text()
+        deployer = (ROOT / "tools" / "phase06_rahti.sh").read_text()
+        preflight = (ROOT / "tools" / "phase06_preflight.sh").read_text()
+        self.assertNotIn("include-external", renderer)
+        self.assertNotIn("mqtt-external", renderer + deployer)
+        self.assertNotIn("routes|", deployer)
+        self.assertNotIn("vps)", preflight)
 
     def test_docker_build_context_excludes_sensitive_material(self):
         patterns = (ROOT / ".dockerignore").read_text()
@@ -211,7 +179,39 @@ class Phase06RenderTests(unittest.TestCase):
             self.assertIn(pattern, patterns)
         self.assertNotIn("!**/.env.example", patterns)
         self.assertIn("**/*.env", patterns)
-        self.assertTrue(Path("infrastructure/vps/sensor-replay.env").match("**/*.env"))
+        git_patterns = (ROOT / ".gitignore").read_text()
+        self.assertIn("infrastructure/compose/rahti-client.env", git_patterns)
+
+    def test_generated_public_certificates_have_runtime_read_permissions(self):
+        generator = (ROOT / "tools" / "phase06_prepare_secrets.sh").read_text()
+        self.assertIn('chmod 600 "$dir"/*', generator)
+        self.assertIn('chmod 644 "$dir/ca.crt" "$dir/server.crt"', generator)
+
+    def test_rahti_preflight_requires_port_forward_permission(self):
+        with tempfile.TemporaryDirectory() as temp:
+            executable = Path(temp) / "oc"
+            executable.write_text(
+                "#!/bin/sh\n"
+                "if [ \"$1\" = project ]; then echo test-project; exit 0; fi\n"
+                "case \"$*\" in\n"
+                "  *'auth can-i create pods/portforward') echo no; exit 1 ;;\n"
+                "  *'auth can-i create '*) echo yes; exit 0 ;;\n"
+                "  *) exit 0 ;;\n"
+                "esac\n"
+            )
+            executable.chmod(0o755)
+            environment = os.environ.copy()
+            environment["PATH"] = f"{temp}:{environment['PATH']}"
+            environment["RAHTI_NAMESPACE"] = "expected-namespace"
+            result = subprocess.run(
+                ["bash", str(ROOT / "tools" / "phase06_preflight.sh"), "rahti"],
+                check=False,
+                capture_output=True,
+                text=True,
+                env=environment,
+            )
+            self.assertNotEqual(0, result.returncode)
+            self.assertIn("pods/portforward: denied (required)", result.stderr)
 
 
 if __name__ == "__main__":

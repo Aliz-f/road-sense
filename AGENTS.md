@@ -1,18 +1,25 @@
 # Codex instructions — RoadSense
 
-STATUS: Phases 00–05 are implemented and tested locally. Phase 06 deployment
-preparation is completed and merged, but actual VPS and CSC Rahti deployment is
-pending. Phase 07 has not started.
+STATUS: Phases 00–05 are implemented and tested locally. Phase 06 repository
+preparation targets the local Linux laptop plus CSC Rahti only; no Rahti
+deployment has been performed. Phase 07 has not started.
 
-1. Read README.md, docs/architecture.md, docs/contracts.md, docs/operations.md, and the selected phases file.
-2. Execute ONE phase at a time. Do not proceed until that phase's acceptance checks pass.
-3. Check actual MUHOS files, official course instructions and Rahti limitations; never invent observed data, units, timestamps, or test outcomes.
-4. Work in a phase-specific branch/PR. Avoid modifying unrelated services.
-5. For implementations: add tests, exact run commands, sanitized logs and an implementation report.
-6. Require approval before installing local or VPS packages, changing SSH/firewall/DNS, spending money, exposing public services, or deploying to Rahti.
-7. No secrets, private files or raw dataset archives in Git. Pin image versions, authenticate MQTT, use TLS, keep DB internal.
-8. Use run_id/sequence_id for traceability; design for duplicate MQTT messages and service restart.
-9. Project measures exploratory vehicle vibrations, NOT scientifically validated potholes or safety classifications.
-10. Stop after completing the chosen phase; report blockers and unmet checks without claiming success.
+1. Read README.md, docs/architecture.md, docs/contracts.md, docs/operations.md, and the selected phase file.
+2. Execute one phase at a time; do not proceed until its acceptance checks pass.
+3. Check actual MUHOS files, official course instructions and Rahti limitations; never invent observed data, units, timestamps, or outcomes.
+4. Work in a phase-specific branch/PR and avoid unrelated services.
+5. For implementations, add tests, exact commands, sanitized logs and an implementation report.
+6. Require approval before installing packages, changing SSH/firewall/DNS, spending money, exposing public services, publishing images, or deploying to Rahti.
+7. Never commit secrets, private files or raw dataset archives. Pin deployed images, authenticate MQTT, verify TLS and keep PostgreSQL internal.
+8. Preserve run_id/sequence_id traceability, duplicate handling and restart recovery.
+9. Describe only exploratory vehicle-vibration measurements, not scientifically validated potholes or safety classifications.
+10. Stop after the chosen phase; report blockers and unmet live checks without claiming deployment success.
 
-**Mandatory workflow:** Phases 00–05 run and are tested entirely on the user's **local laptop** using Docker Compose. Only Phase 06 deploys services to the personally owned **VPS** and **CSC Rahti**; do not touch either remote environment earlier. The GitHub repo is the development source; verify separate GitLab submission requirements.
+**Mandatory workflow:** Phases 00–05 run entirely on the laptop with Docker
+Compose. Phase 06 keeps that local application and deploys only Mosquitto,
+Signal Processor, Road Analyzer, PostgreSQL and FastAPI to the existing CSC
+Rahti OpenShift environment. The laptop may run Sensor Replay and Streamlit for
+a cross-environment demo through loopback-only `oc port-forward`. Do not use a
+VPS, create public endpoints, install another Kubernetes distribution, or touch
+remote infrastructure without explicit approval. GitHub is the development
+source; separately satisfy the official GitLab `Final-Project/` submission.

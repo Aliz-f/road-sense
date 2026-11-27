@@ -1,27 +1,20 @@
 # Docker Compose
 
-**Status: Phase 05 complete local Sensor Replay + MQTT + Signal Processor +
-Road Analyzer + PostgreSQL + FastAPI + Streamlit stack verified. No remote
-deployment exists.**
+`local.compose.yaml` is the unchanged complete laptop application: Sensor
+Replay, authenticated TLS Mosquitto, Signal Processor, Road Analyzer,
+PostgreSQL, FastAPI and Streamlit plus migrations and test helpers. Only FastAPI
+and Streamlit publish loopback ports. MQTT/PostgreSQL remain private, and named
+volumes retain broker, processor and database state.
 
-`preflight.compose.yaml` verifies the laptop daemon, Compose lifecycle, health
-checks, an internal network, a read-only root filesystem, and absence of
-published ports. It contains no RoadSense application service.
+`rahti-client.compose.yaml` is a small Phase 06 override for the distributed
+demo. It runs only Sensor Replay and Streamlit, resets their local backend
+dependencies and lets the Linux containers reach laptop-loopback `oc
+port-forward` sockets with host networking. It does not define another laptop
+stack or change application contracts.
 
-Phases 02–05 add the broker, feeder, processor, analyzer, migrations, database,
-API, and dashboard on the **local laptop**. Phase 06
-creates a separate VPS Compose deployment for only sensor-replay and dashboard.
+Copy `rahti-client.env.example` to the ignored `rahti-client.env`, protect it
+with mode 600, and follow `../../docs/phase-06-deployment-guide.md`. MQTT still
+uses authentication and CA-verified TLS. No public endpoint is involved.
 
-`local.compose.yaml` currently contains Sensor Replay, Signal Processor, Road
-Analyzer, PostgreSQL 16.6, FastAPI, Streamlit/Plotly, a migration job, a
-TLS/authenticated Mosquitto broker, an auth-file initializer, and profile-gated
-test containers. Only FastAPI (`127.0.0.1:8000`) and Streamlit
-(`127.0.0.1:8501`) publish host ports. MQTT and database traffic stay on the
-internal `roadsense-local_roadsense` network; API/dashboard HTTP also uses the
-limited `roadsense-local_browser` network.
-The database uses `roadsense-local-postgres-data`; routine `down` preserves it.
-Local passwords, certificate keys, and dataset paths are generated under
-Git-ignored paths by `../../tools/prepare_phase02_local.sh`.
-
-See `../../docs/local-development.md`, the numbered specifications under
-`../../phases/`, and `../../docs/architecture.md`.
+`preflight.compose.yaml` is the Phase 01 daemon/lifecycle check and contains no
+RoadSense application service.

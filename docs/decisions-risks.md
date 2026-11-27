@@ -1,28 +1,34 @@
 # Decisions, assumptions and risks
 
 ## Confirmed plan
-- **Development and testing: the user's local laptop**, with **all seven application components on local Docker Compose**.
-- **Final deployment: the user's personal VPS** runs MUHOS dataset, sensor-replay and dashboard using Docker Compose.
-- **Final deployment: CSC Rahti** runs Mosquitto broker, signal-processor, road-analyzer, PostgreSQL and FastAPI with Kubernetes/OpenShift.
-- Phases 00–05 are implemented and verified locally; Phase 06 remains gated on
-  separate explicit selection and remote-change approval.
-- Start with MUHOS Bosch IMU; CAN speed is a possible extension after unit/timing verification.
-- No ML, LiDAR, cameras, ROS2, live vehicle or validated pothole detection.
 
-## Checks still needed
-1. Recheck precise course grading wording and required GitLab submission;
-   laptop development plus remote split is the planned evidence.
-2. Before remote deployment, verify personal VPS OS, RAM, disk, access method,
-   firewall, DNS, security and data storage.
-3. Check Rahti quotas, TLS/MQTT routing and persistent storage.
-4. Verify CAN speed units and synchronization before correlating streams.
-5. Choose and verify the Phase 06 dashboard/API authentication and HTTPS strategy.
+- The Linux laptop runs the complete application locally with Docker Compose.
+- CSC Rahti runs Mosquitto, Signal Processor, Road Analyzer, PostgreSQL/PVC and FastAPI.
+- Laptop Sensor Replay and Streamlit use loopback-only `oc port-forward` for a distributed demo.
+- No VPS, public API Route, public MQTT LoadBalancer, external DNS or second Kubernetes cluster.
+- Algorithms and outputs remain exploratory vibration metrics.
 
-## Risks / response
-- **Local vs cloud grading interpretation:** clearly demonstrate full laptop Docker Compose integration and separately VPS↔Rahti communication; confirm exact official rules.
-- **Misleading results:** report vibration statistics only, not certified road quality; speed, gravity and mounting orientation affect signals.
-- **Time/unit confusion:** data profiling and numeric tests before processing.
-- **Duplicates:** MQTT QoS1 + unique run/window keys and database upserts.
-- **Remote exposure:** TLS, credential management, internal database, authenticated dashboard/API.
-- **Deployment difficulties:** prove full stack locally, then publish versioned images and migrate in controlled steps.
-- **Quota/data loss:** small sessions first, PVC backup/restore and planned rollback.
+## Live checks still needed
+
+1. Rahti quota, SCC/seccomp, arbitrary UID, storage class and NetworkPolicy behavior.
+2. Registry pulls and immutable image/platform compatibility.
+3. OpenShift PostgreSQL image startup, migration and PVC ownership/path.
+4. Service port-forward behavior for MQTT and API on the actual project.
+5. Broker, database and processor journal persistence/recovery.
+6. Exact GitLab course-fork submission contents and current demo rules.
+
+## Risks and responses
+
+- **Port-forward interrupted:** keep commands foregrounded, demonstrate reconnect,
+  and treat the tunnel as temporary demo access rather than availability design.
+- **TLS name mismatch:** issue the private broker certificate with both
+  `localhost` and `mqtt-broker` DNS SANs; never disable verification.
+- **Misleading results:** retain units/provenance and avoid pothole/safety claims.
+- **Duplicates/restarts:** preserve QoS 1, stable client IDs, idempotency keys,
+  analyzer outbox and processor journal PVC.
+- **Data loss:** verify backups, then perform controlled restart tests; never
+  delete PVCs as rollback.
+- **Course mismatch:** cite the official instructions and recheck them before submission.
+
+The personal VPS/public-endpoint plan is abandoned historical context, not a
+fallback that should be deployed without a new scoped decision and approval.

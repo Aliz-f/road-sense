@@ -1,4 +1,4 @@
-# OPTIONAL RAW TCP MQTT ACCESS — NEVER APPLY WITHOUT CSC SERVICE DESK APPROVAL
+# HISTORICAL VPS-ERA OPTION — not rendered or applied by current tooling.
 # for a project LoadBalancer ingress IP and explicit owner deployment approval.
 # CSC documents Routes as HTTP(S)-only; MQTT must not use an OpenShift Route.
 apiVersion: v1

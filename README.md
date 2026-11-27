@@ -1,77 +1,68 @@
 # RoadSense — MUHOS Distributed Vehicle Vibration Monitoring
 
-> **LOCAL PHASE 05** — the complete laptop Docker Compose application now runs
-> verified MUHOS Sensor Replay → authenticated TLS MQTT → source-time Signal
-> Processor → Road Analyzer → persistent PostgreSQL → typed FastAPI →
-> Streamlit/Plotly. FastAPI and Streamlit bind to loopback only; MQTT and the
-> database remain internal. **No remote deployment or cloud resource exists yet.**
+> **PHASE 06 PREPARED, NOT DEPLOYED.** Phases 00–05 run as a complete,
+> tested Docker Compose application on the local Linux laptop. Phase 06 deploys
+> only the backend to CSC Rahti; live Rahti verification still requires approval.
 
-RoadSense is a Software Defined Systems final-project design. It replays [MUHOS](https://m3s-kuura.github.io/muhos-dataset/) Bosch IMU measurements to explore vehicle vibration patterns in a distributed system. Vibration alerts are exploratory metrics, **not validated pothole or road-safety detection**.
+RoadSense is a University of Oulu Software Defined Systems course project. It
+replays [MUHOS](https://m3s-kuura.github.io/muhos-dataset/) Bosch IMU data to
+explore vehicle vibration patterns. Results are exploratory metrics, **not
+validated pothole detection or road-safety classifications**.
 
-## Workflow: develop locally first, then deploy
+## Deployment architecture
 
-**Development (Phases 00–05):** run the **entire app on the local laptop using Docker Compose**, including feeder, broker, processor, analyzer, PostgreSQL, FastAPI, and dashboard. Complete local testing before remote deployments.
-
-**Final deployment (Phase 06):**
-
-| Your own VPS — Docker Compose | CSC Rahti — OpenShift/Kubernetes |
+| Local Linux laptop — Docker Compose | CSC Rahti — OpenShift/OKD |
 |---|---|
-| Private MUHOS dataset files | Mosquitto MQTT broker |
-| Python Sensor Replay (CSV to MQTT) | Python Signal Processor |
-| Streamlit/Plotly Dashboard | Road Analyzer |
-| Connects outbound using MQTT/TLS and HTTPS | PostgreSQL and FastAPI |
+| Complete seven-service application for development and tests | Mosquitto, Signal Processor, Road Analyzer, PostgreSQL/PVC and FastAPI |
+| Cross-environment demo: Sensor Replay and Streamlit only | Private ClusterIP Services reached through authenticated `oc port-forward` |
 
-Data flow: **MUHOS CSV → VPS Sensor Replay → MQTT/TLS → Rahti Broker → Signal Processor → MQTT features → Road Analyzer → PostgreSQL → FastAPI → HTTPS → VPS Dashboard**.
+The complete local path is Sensor Replay → authenticated TLS Mosquitto → Signal
+Processor → Road Analyzer → PostgreSQL → FastAPI → Streamlit. For the distributed
+demo, two laptop-loopback forwards carry authenticated MQTT/TLS and private API
+traffic to Rahti. No VPS, public MQTT LoadBalancer, public API Route, external
+DNS, or source-IP allowlist is required.
 
-[View editable architecture diagram](architecture/road-sense.mmd) · [Architecture explanation](docs/architecture.md)
+[Architecture diagram](architecture/road-sense.mmd) ·
+[Architecture explanation](docs/architecture.md) ·
+[Phase 06 deployment guide](docs/phase-06-deployment-guide.md) ·
+[Plan-correction report](docs/phase-06-plan-correction-report.md)
+
+## Course alignment
+
+The official final-project instructions, checked on 2026-11-27, require a
+dockerized, non-monolithic application whose microservices communicate locally
+and with Rahti resources. They do not state a VPS requirement. They also require
+submission material in the course fork's `Final-Project/` directory, an
+architecture image, and an approximately ten-minute recorded demonstration.
+Recheck the [official instructions](https://gitlab.com/sdx-oulu/2024/hw-and-project/-/blob/main/Final-Project/README.md)
+before submission because course material can change.
 
 ## Documentation
 
 - [Codex operating instructions](AGENTS.md)
 - [System architecture and network boundaries](docs/architecture.md)
-- [Data contracts, MQTT topics, database, and API](docs/contracts.md)
-- [VPS/Rahti deployment and security operations](docs/operations.md)
-- [Acceptance tests, final demo and course submission](docs/acceptance-and-submission.md)
-- [Known risks and open questions](docs/decisions-risks.md)
-- [Repository layout and ownership](docs/repository-map.md)
+- [Data, MQTT, database and API contracts](docs/contracts.md)
+- [Operations](docs/operations.md)
+- [Acceptance and submission](docs/acceptance-and-submission.md)
+- [Known risks and open checks](docs/decisions-risks.md)
 
-## Eight phases — implement strictly in order
+## Phases
 
-| Phase | Objective | Phase instructions |
+| Phase | Objective | Instructions |
 |---|---|---|
 | 00 | Verify MUHOS files and course rules | [Open](phases/00-scope-data.md) |
-| 01 | Prepare local laptop Docker/Compose development | [Open](phases/01-local-foundation.md) |
-| 02 | Replay IMU CSV locally using Python/Docker/MQTT | [Open](phases/02-replay-mqtt.md) |
-| 03 | Compute vibration features from MQTT streams | [Open](phases/03-signal-processing.md) |
+| 01 | Prepare laptop Docker/Compose development | [Open](phases/01-local-foundation.md) |
+| 02 | Replay IMU CSV through authenticated MQTT | [Open](phases/02-replay-mqtt.md) |
+| 03 | Compute source-time vibration features | [Open](phases/03-signal-processing.md) |
 | 04 | Add rules and persistent PostgreSQL storage | [Open](phases/04-analyzer-storage.md) |
-| 05 | Complete full application locally with FastAPI/Streamlit | [Open](phases/05-api-dashboard.md) |
-| 06 | Deploy the tested system to personal VPS and Rahti | [Open](phases/06-rahti-integration.md) |
+| 05 | Add FastAPI and Streamlit | [Open](phases/05-api-dashboard.md) |
+| 06 | Deploy the private backend to Rahti and demo from laptop | [Open](phases/06-rahti-integration.md) |
 | 07 | Verify, demonstrate, document and submit | [Open](phases/07-final-submission.md) |
 
-Each phase document contains a **goal, prerequisites, tasks for Codex, deliverables, acceptance criteria, and a copyable Codex request**. Codex should implement one phase per branch and stop before starting the next.
+Raw recordings, credentials, certificate keys and generated deployment files
+must remain outside Git. Images are digest-pinned on Rahti; MQTT remains
+authenticated and TLS-verified; PostgreSQL remains internal.
 
-## Planned structure
-
-- `services/sensor-replay` — VPS Python/Pandas MQTT feeder
-- `services/signal-processor` — Python source-time vibration feature calculation
-- `services/road-analyzer` — Rahti Python rules and PostgreSQL writing
-- `services/api` — Rahti FastAPI REST
-- `services/dashboard` — VPS Streamlit/Plotly
-- `infrastructure/vps` — VPS guides
-- `infrastructure/compose` — local/VPS Docker Compose
-- `infrastructure/rahti` — Kubernetes/OpenShift manifests
-- `data` — acquisition docs, **not recordings**
-- `tests` — local cross-service validation
-
-## Scope and key decisions
-
-MVP: replay one verified Bosch IMU CSV recording; compute time-window vibration RMS/peak; report high-vibration events; store and visualize results; demonstrate **both** full local laptop integration and VPS-to-Rahti communication. Optional later: CAN speed after checking dataset units and timing. **No ML, ROS2, LiDAR, raw camera analysis, or real vehicle integration.**
-
-**Course validation:** full local Docker Compose development on the laptop is included. The personally owned VPS is a remote runtime, not a substitute for local testing. Recheck precise official requirements before final submission. The [official course repo](https://gitlab.com/sdx-oulu/2024/hw-and-project) may require submission in its GitLab `Final-Project/` path rather than this GitHub repository. Check [submission instructions](https://gitlab.com/sdx-oulu/2024/hw-and-project/-/blob/main/Final-Project/README.md) at Phase 00.
-
-Data source: [MUHOS documentation](https://m3s-kuura.github.io/muhos-dataset/). License, citation, schema, timestamps and units must be verified from actual downloaded files before implementation. Never commit raw archives or credentials.
-
-**Next action:** review [Phase 06 deployment preparation](docs/phase-06-deployment-guide.md).
-Phase 06 preparation files do not authorize remote access or deployment; VPS/Rahti deployment and acceptance remain pending explicit approval.
-Offline correction evidence and live verification gaps are recorded in the
-[Phase 06 report](docs/phase-06-report.md).
+The former personal-VPS plan was abandoned before deployment. Historical Phase
+reports may describe it as the plan at that time; `infrastructure/vps` and the
+optional public-endpoint templates are retained only as inactive history.

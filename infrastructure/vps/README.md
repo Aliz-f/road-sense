@@ -1,4 +1,10 @@
-# Phase 06 — VPS (deployment preparation only)
+# Phase 06 — VPS (archived; do not deploy)
+
+> The personal-VPS plan was abandoned before deployment. This directory is
+> retained only as historical design context. It is not part of the current
+> laptop + private CSC Rahti workflow, and current Phase 06 tools do not use it.
+> Follow `../../docs/phase-06-deployment-guide.md`; the commands below are not
+> active instructions.
 
 This folder will run **only** Sensor Replay (one-shot) and Streamlit (long-running).
 No VPS actions have been taken by this change.

@@ -122,4 +122,6 @@ This GitHub repository remains the development source. Phase 07 must verify the 
 
 Read-only local prerequisite check: 146 GiB free workspace storage, 16 logical CPUs, and 15 GiB currently available RAM. Docker CLI 27.5.1 and Docker Compose v5.6.1 are installed, but this session could not connect to the Docker daemon socket, so daemon availability is **not** verified. No packages, Docker settings, VPS/Rahti system, or deployment were changed.
 
-The topology remains: all services run locally via Docker Compose in Phases 01–05; only Phase 06 may use the personal VPS and CSC Rahti.
+The topology remains: all services run locally via Docker Compose in Phases
+01–05; Phase 06 deploys the private backend only to CSC Rahti and keeps replay
+and dashboard clients on the laptop.

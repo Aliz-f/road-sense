@@ -1,26 +1,20 @@
 # Repository ownership
 
-README.md: project navigation and objective.
-AGENTS.md: Codex operational guardrails.
-docs/: design decisions, architecture, contracts, operations and submission.
-config/environments/: secret-free environment templates; actual `.env` files are private and ignored.
-phases/: eight ordered implementation specifications and acceptance criteria.
-architecture/road-sense.mmd: editable conceptual diagram.
-services/sensor-replay/: local MUHOS-to-MQTT replay implementation, Phase 02; later deployed to VPS in Phase 06.
-services/signal-processor/: local source-time window feature calculation, Phase 03; later deployed to Rahti in Phase 06.
-services/road-analyzer/: local Phase 04 rules, migrations, event publication,
-and PostgreSQL persistence; later deployed to Rahti in Phase 06.
-services/api/: read-only typed FastAPI service developed locally in Phase 05;
-later deployed to Rahti in Phase 06.
-services/dashboard/: Streamlit/Plotly API client developed locally in Phase 05;
-later deployed to VPS in Phase 06.
-infrastructure/vps/: private VPS deployment/runbook, Phase 06.
-infrastructure/compose/: Phase 01 preflight, complete laptop development stack (Phases 02–05), and VPS runtime stack (Phase 06).
-infrastructure/rahti/: Kubernetes manifests/runbooks, Phase 06.
-data/: documented acquisition and private data mounts, Phase 00.
-tools/: dataset inspection, local validation, and ignored local credential/TLS preparation utilities.
-tests/: Phase 02 MQTT tests and Phase 03 cross-service feature integration/reference checks.
+- `README.md`, `AGENTS.md`: project navigation and operational guardrails.
+- `docs/`: architecture, contracts, operations, evidence and submission.
+- `config/environments/`: secret-free inventories; real `.env` files are ignored.
+- `phases/`: ordered specifications and acceptance criteria.
+- `architecture/road-sense.mmd`: editable current laptop/Rahti diagram.
+- `services/`: the seven application services developed in Phases 02–05.
+- `infrastructure/compose/local.compose.yaml`: complete laptop application.
+- `infrastructure/compose/rahti-client.compose.yaml`: laptop client override for
+  private Rahti port-forwards.
+- `infrastructure/rahti/`: active private OpenShift templates and runbook.
+- `infrastructure/vps/`: inactive historical artifacts from the abandoned plan.
+- `data/`: acquisition documentation and private mount guidance, not recordings.
+- `tools/`: local validation, release, render and guarded deployment helpers.
+- `tests/`: service, integration and offline Phase 06 preparation checks.
 
-API and dashboard containers, tests, and the complete local Compose path are
-implemented. No Phase 06 Kubernetes/VPS manifest or cloud deployment is part
-of the current scope.
+Sensor Replay and Streamlit remain laptop services in Phase 06. Mosquitto,
+Signal Processor, Road Analyzer, PostgreSQL and FastAPI are deployed to Rahti
+only after approval. No public endpoint manifest is in the active render/apply path.

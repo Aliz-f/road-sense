@@ -14,7 +14,7 @@ if [[ $1 == --execute && ${ROAD_SENSE_APPROVED:-} != yes ]]; then
   echo "Explicit approval required: ROAD_SENSE_APPROVED=yes" >&2; exit 2
 fi
 git diff --quiet && git diff --cached --quiet || { echo "commit and review local changes before publishing" >&2; exit 2; }
-declare -a services=(sensor-replay signal-processor road-analyzer api dashboard mqtt-broker)
+declare -a services=(signal-processor road-analyzer api mqtt-broker)
 for service in "${services[@]}"; do
   if [[ $service == mqtt-broker ]]; then
     dockerfile=infrastructure/rahti/mosquitto/Dockerfile
@@ -31,6 +31,6 @@ for service in "${services[@]}"; do
     docker buildx imagetools inspect "$image"
   fi
 done
-echo "Pin image digests in infrastructure/rahti/images.env and infrastructure/vps/.env."
-echo "Keep dashboard.env separate from sensor-replay.env; only replay receives MQTT credentials."
+echo "Pin image digests in infrastructure/rahti/images.env."
+echo "Sensor Replay and Dashboard continue to use locally built Compose images on the laptop."
 echo "PostgreSQL is a separate OpenShift-compatible upstream image; verify and pin its digest."
